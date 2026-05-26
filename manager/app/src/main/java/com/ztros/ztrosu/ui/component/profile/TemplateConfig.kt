@@ -13,8 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.R
-import com.ztros.ztrosu.ui.util.listAppProfileTemplates
-import com.ztros.ztrosu.ui.util.setSepolicy
+
 import com.ztros.ztrosu.ui.viewmodel.getTemplateInfoById
 
 /**
@@ -33,7 +32,7 @@ fun TemplateConfig(
     var template by rememberSaveable {
         mutableStateOf(profile.rootTemplate ?: "")
     }
-    val profileTemplates = listAppProfileTemplates()
+    val profileTemplates = com.ztros.ztrosu.ui.util.listAppProfileTemplates()
     val noTemplates = profileTemplates.isEmpty()
 
     ListItem(headlineContent = {
@@ -69,35 +68,37 @@ fun TemplateConfig(
             ) {
                 profileTemplates.forEach { tid ->
                     val templateInfo =
-                        getTemplateInfoById(tid) ?: return@forEach
-                    DropdownMenuItem(
-                        text = { Text(tid) },
-                        onClick = {
-                            template = tid
-                            if (setSepolicy(tid, templateInfo.rules.joinToString("\n"))) {
-                                onProfileChange(
-                                    profile.copy(
-                                        rootTemplate = tid,
-                                        rootUseDefault = false,
-                                        uid = templateInfo.uid,
-                                        gid = templateInfo.gid,
-                                        groups = templateInfo.groups,
-                                        capabilities = templateInfo.capabilities,
-                                        context = templateInfo.context,
-                                        namespace = templateInfo.namespace,
+                        getTemplateInfoById(tid)
+                    if (templateInfo != null) {
+                        DropdownMenuItem(
+                            text = { Text(tid) },
+                            onClick = {
+                                template = tid
+                                if (com.ztros.ztrosu.ui.util.setSepolicy(templateInfo.rules.joinToString("\n"))) {
+                                    onProfileChange(
+                                        profile.copy(
+                                            rootTemplate = tid,
+                                            rootUseDefault = false,
+                                            uid = templateInfo.uid,
+                                            gid = templateInfo.gid,
+                                            groups = templateInfo.groups,
+                                            capabilities = templateInfo.capabilities,
+                                            context = templateInfo.context,
+                                            namespace = templateInfo.namespace,
+                                        )
                                     )
-                                )
+                                }
+                                expanded = false
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = {
+                                    onViewTemplate(tid)
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.ReadMore, null)
+                                }
                             }
-                            expanded = false
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                onViewTemplate(tid)
-                            }) {
-                                Icon(Icons.AutoMirrored.Filled.ReadMore, null)
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }

@@ -145,12 +145,12 @@ fun BackupRestoreScreen(navigator: DestinationsNavigator) {
                         )
                         Column {
                             Text(
-                                text = stringResource(R.string.backup_modules),
+                                text = stringResource(R.string.module_backup),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = stringResource(R.string.backup_modules_summary),
+                                text = stringResource(R.string.module_backup_message),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -169,7 +169,7 @@ fun BackupRestoreScreen(navigator: DestinationsNavigator) {
                             contentDescription = null,
                             modifier = Modifier.padding(end = 8.dp)
                         )
-                        Text(stringResource(R.string.backup))
+                        Text(stringResource(R.string.module_backup))
                     }
                 }
             }
@@ -191,7 +191,7 @@ fun BackupRestoreScreen(navigator: DestinationsNavigator) {
                         )
                         Column {
                             Text(
-                                text = stringResource(R.string.restore_modules),
+                                text = stringResource(R.string.module_restore),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )

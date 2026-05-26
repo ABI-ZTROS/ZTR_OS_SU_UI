@@ -28,7 +28,7 @@ import com.ztros.ztrosu.R
 import com.ztros.ztrosu.profile.Capabilities
 import com.ztros.ztrosu.profile.Groups
 import com.ztros.ztrosu.ui.component.rememberCustomDialog
-import com.ztros.ztrosu.ui.util.isSepolicyValid
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -398,7 +398,7 @@ private fun SELinuxPanel(
                     rules = it ?: ""
                 },
                 validationListener = { value ->
-                    if (isSepolicyValid(value)) ValidationResult.Valid
+                    if (com.ztros.ztrosu.ui.util.isSepolicyValid(value)) ValidationResult.Valid
                     else ValidationResult.Invalid("SELinux rules is invalid!")
                 }
             )

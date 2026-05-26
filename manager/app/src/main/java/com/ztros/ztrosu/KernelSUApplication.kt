@@ -8,7 +8,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import coil.Coil
 import coil.ImageLoader
-import com.ztros.ztrosu.ui.util.createRootShellBuilder
+
 import com.ztros.ztrosu.ui.viewmodel.ModuleViewModel
 import com.ztros.ztrosu.ui.viewmodel.SuperUserViewModel
 import kotlinx.coroutines.CoroutineScope

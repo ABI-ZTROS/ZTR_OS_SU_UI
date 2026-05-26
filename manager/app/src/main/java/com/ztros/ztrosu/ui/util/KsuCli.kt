@@ -529,3 +529,71 @@ fun setDefaultUmountModules(umount: Boolean): Boolean {
     Log.i(TAG, "UI-Only: Setting default umount modules to $umount")
     return true
 }
+
+/**
+ * Check if SELinux policy is valid - UI-Only mode
+ */
+fun isSepolicyValid(rules: String?): Boolean {
+    return true
+}
+
+/**
+ * List app profile templates - UI-Only mode
+ */
+fun listAppProfileTemplates(): List<String> {
+    return listOf("default", "none")
+}
+
+/**
+ * Set SELinux policy - UI-Only mode
+ */
+fun setSepolicy(rules: String): Boolean {
+    Log.i(TAG, "UI-Only: Setting SELinux policy")
+    return true
+}
+
+/**
+ * Get SELinux policy - UI-Only mode
+ */
+fun getSepolicy(): String {
+    return ""
+}
+
+/**
+ * Get SELinux policy for package - UI-Only mode
+ */
+fun getSepolicy(packageName: String): String {
+    return ""
+}
+
+/**
+ * Launch app - UI-Only mode
+ */
+fun launchApp(packageName: String): Boolean {
+    Log.i(TAG, "UI-Only: Launching app $packageName")
+    return true
+}
+
+/**
+ * Force stop app - UI-Only mode
+ */
+fun forceStopApp(packageName: String): Boolean {
+    Log.i(TAG, "UI-Only: Force stopping app $packageName")
+    return true
+}
+
+/**
+ * Restart app - UI-Only mode
+ */
+fun restartApp(packageName: String): Boolean {
+    Log.i(TAG, "UI-Only: Restarting app $packageName")
+    return true
+}
+
+/**
+ * Install module from URI with callback - UI-Only mode
+ */
+fun install(uri: Uri, onFinish: (Boolean) -> Unit) {
+    Log.i(TAG, "UI-Only: Installing module from URI $uri")
+    installModule(uri, onFinish)
+}

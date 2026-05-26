@@ -201,7 +201,9 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {}
 
         val isManager = Natives.isManager
-        if (isManager) install()
+        if (isManager) {
+            // Module installation is handled via UI
+        }
 
         if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) {
             intent.extras?.clear()

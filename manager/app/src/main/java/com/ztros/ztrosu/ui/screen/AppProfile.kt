@@ -81,7 +81,7 @@ fun AppProfileScreen(
     val packageName = appInfo.packageName
     val initialProfile = Natives.getAppProfile(packageName, appInfo.uid)
     if (initialProfile.allowSu) {
-        initialProfile.rules = getSepolicy(packageName)
+        initialProfile.rules = com.ztros.ztrosu.ui.util.getSepolicy(packageName)
     }
     var profile by rememberSaveable {
         mutableStateOf(initialProfile)
@@ -143,7 +143,7 @@ fun AppProfileScreen(
                             snackBarHost.showSnackbar(suNotAllowed)
                             return@launch
                         }
-                        if (!it.rootUseDefault && it.rules.isNotEmpty() && !setSepolicy(profile.name, it.rules)) {
+                        if (!it.rootUseDefault && it.rules.isNotEmpty() && !com.ztros.ztrosu.ui.util.setSepolicy(it.rules)) {
                             snackBarHost.showSnackbar(failToUpdateSepolicy)
                             return@launch
                         }
@@ -358,21 +358,21 @@ private fun AppMenuBox(packageName: String, content: @Composable () -> Unit) {
                 text = { Text(stringResource(id = R.string.launch_app)) },
                 onClick = {
                     expanded = false
-                    launchApp(packageName)
+                    com.ztros.ztrosu.ui.util.launchApp(packageName)
                 },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(id = R.string.force_stop_app)) },
                 onClick = {
                     expanded = false
-                    forceStopApp(packageName)
+                    com.ztros.ztrosu.ui.util.forceStopApp(packageName)
                 },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(id = R.string.restart_app)) },
                 onClick = {
                     expanded = false
-                    restartApp(packageName)
+                    com.ztros.ztrosu.ui.util.restartApp(packageName)
                 },
             )
         }
