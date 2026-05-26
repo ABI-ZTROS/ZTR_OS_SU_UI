@@ -65,7 +65,7 @@ import com.ramcosta.composedestinations.generated.destinations.ModuleScreenDesti
 import com.ramcosta.composedestinations.generated.destinations.SettingScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SuperUserScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import com.topjohnwu.superuser.ShellUtils
+import com.ztros.ztrosu.ui.util.ShellUtils
 import com.ztros.ztrosu.*
 import com.ztros.ztrosu.R
 import com.ztros.ztrosu.ui.component.rememberConfirmDialog

@@ -2,574 +2,530 @@ package com.ztros.ztrosu.ui.util
 
 import android.app.Activity
 import android.content.Intent
-import android.content.ContentResolver
-import android.content.Context
-import android.database.Cursor
 import android.net.Uri
 import android.os.Parcelable
-import android.os.SystemClock
-import android.provider.OpenableColumns
-import android.system.Os
 import android.util.Log
 import com.ztros.ztrosu.Natives
-import com.ztros.ztrosu.ksuApp
-import com.topjohnwu.superuser.CallbackList
-import com.topjohnwu.superuser.Shell
-import com.topjohnwu.superuser.ShellUtils
-import com.topjohnwu.superuser.io.SuFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
-import org.json.JSONArray
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
- * @author weishu
- * @date 2023/1/1.
+ * ZTR_OS SU UI-Only Mode - KsuCli
+ * Simplified version without libsu dependencies
  */
 private const val TAG = "KsuCli"
-private const val BUSYBOX = "/data/adb/ksu/bin/busybox"
 
-private fun getKsuDaemonPath(): String {
-    return ksuApp.applicationInfo.nativeLibraryDir + File.separator + "libksud.so"
-}
+@Parcelize
+data class FlashResult(val code: Int, val err: String, val showReboot: Boolean) : Parcelable
 
-private val suSFSDaemonPath by lazy {
-    "${ksuApp.applicationInfo.nativeLibraryDir}${File.separator}libsusfsd.so"
-}
+/**
+ * Check if we have root access (UI-Only mode always returns true for testing)
+ */
+fun rootAvailable(): Boolean = true
 
-data class FlashResult(val code: Int, val err: String, val showReboot: Boolean) {
-    constructor(result: Shell.Result, showReboot: Boolean) : this(result.code, result.err.joinToString("\n"), showReboot)
-    constructor(result: Shell.Result) : this(result, result.isSuccess)
-}
-
-inline fun <T> withNewRootShell(
-    globalMnt: Boolean = false,
-    block: Shell.() -> T
-): T {
-    return createRootShell(globalMnt).use(block)
-}
-
-fun Uri.getFileName(context: Context): String? {
-    var fileName: String? = null
-    val contentResolver: ContentResolver = context.contentResolver
-    val cursor: Cursor? = contentResolver.query(this, null, null, null, null)
-    cursor?.use {
-        if (it.moveToFirst()) {
-            fileName = it.getString(it.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-        }
-    }
-    return fileName
-}
-
-fun createRootShellBuilder(globalMnt: Boolean = false): Shell.Builder {
-    return Shell.Builder.create().run {
-        val cmd = buildString {
-            append("${getKsuDaemonPath()} debug su")
-            if (globalMnt) append(" -g")
-            append(" || ")
-            append("su")
-            if (globalMnt) append(" --mount-master")
-            append(" || ")
-            append("sh")
-        }
-        setCommands("sh", "-c", cmd)
+/**
+ * Get kernel version string
+ */
+fun getKernelVersion(): String {
+    return try {
+        System.getProperty("os.version") ?: "Unknown"
+    } catch (e: Exception) {
+        "Unknown"
     }
 }
 
-fun createRootShell(globalMnt: Boolean = false): Shell {
-    return runCatching {
-        createRootShellBuilder(globalMnt).build()
-    }.getOrElse { e ->
-        Log.w(TAG, "su failed: ", e)
-        Shell.Builder.create().apply {
-            if (globalMnt) setFlags(Shell.FLAG_MOUNT_MASTER)
-        }.build()
-    }
+/**
+ * Install module - UI-Only mode (simulated)
+ */
+suspend fun installModule(uri: Uri, onFinish: (Boolean) -> Unit) = withContext(Dispatchers.IO) {
+    // In UI-Only mode, just simulate success
+    Log.i(TAG, "UI-Only: Simulating module install for $uri")
+    onFinish(true)
 }
 
-fun execKsud(args: String, newShell: Boolean = false): Boolean {
-    return if (newShell) {
-        withNewRootShell {
-            ShellUtils.fastCmdResult(this, "${getKsuDaemonPath()} $args")
-        }
-    } else {
-        ShellUtils.fastCmdResult("${getKsuDaemonPath()} $args")
-    }
+/**
+ * Flash module - UI-Only mode (simulated)
+ */
+suspend fun flashModule(uri: Uri, onFinish: (FlashResult) -> Unit) = withContext(Dispatchers.IO) {
+    Log.i(TAG, "UI-Only: Simulating module flash for $uri")
+    onFinish(FlashResult(0, "", true))
 }
 
-suspend fun getFeatureStatus(feature: String): String = withContext(Dispatchers.IO) {
-    val shell = createRootShell(true)
-    
-    val out = shell.newJob()
-        .add("${getKsuDaemonPath()} feature check $feature").to(ArrayList<String>(), null).exec().out
-    out.firstOrNull()?.trim().orEmpty()
+/**
+ * Flash AnyKernel zip - UI-Only mode (simulated)
+ */
+suspend fun flashAnyKernel(uri: Uri, onFinish: (FlashResult) -> Unit) = withContext(Dispatchers.IO) {
+    Log.i(TAG, "UI-Only: Simulating AnyKernel flash for $uri")
+    onFinish(FlashResult(0, "", true))
 }
 
-suspend fun getFeaturePersistValue(feature: String): Long? = withContext(Dispatchers.IO) {
-    val shell = createRootShell(true)
-    
-    val out = shell.newJob()
-        .add("${getKsuDaemonPath()} feature get --config $feature").to(ArrayList<String>(), null).exec().out
-    val valueLine = out.firstOrNull { it.trim().startsWith("Value:") } ?: return@withContext null
-    valueLine.substringAfter("Value:").trim().toLongOrNull()
+/**
+ * Reboot device
+ */
+fun reboot(reason: String = "") {
+    ShellUtils.fastCmdResult("reboot $reason")
 }
 
-fun install() {
-    val start = SystemClock.elapsedRealtime()
-    val magiskboot = File(ksuApp.applicationInfo.nativeLibraryDir, "libmagiskboot.so").absolutePath
-    val result = execKsud("install --magiskboot $magiskboot", true)
-    Log.w(TAG, "install result: $result, cost: ${SystemClock.elapsedRealtime() - start}ms")
+/**
+ * Reboot to recovery
+ */
+fun rebootRecovery() {
+    reboot("recovery")
 }
 
-fun listModules(): String {
-    val out =
-        Shell.cmd("${getKsuDaemonPath()} module list").to(ArrayList(), null).exec().out
-    return out.joinToString("\n").ifBlank { "[]" }
+/**
+ * Reboot to bootloader
+ */
+fun rebootBootloader() {
+    reboot("bootloader")
 }
 
-fun getModuleCount(): Int {
-    return runCatching {
-        JSONArray(listModules()).length()
-    }.getOrDefault(0)
-}
-
-fun getSuperuserCount(): Int {
-    return Natives.getSuperuserCount()
-}
-
-fun toggleModule(id: String, enable: Boolean): Boolean {
-    val cmd = if (enable) {
-        "module enable $id"
-    } else {
-        "module disable $id"
-    }
-    val result = execKsud(cmd, true)
-    Log.i(TAG, "$cmd result: $result")
-    return result
-}
-
-fun uninstallModule(id: String): Boolean {
-    val cmd = "module uninstall $id"
-    val result = execKsud(cmd, true)
-    Log.i(TAG, "uninstall module $id result: $result")
-    return result
-}
-
-fun restoreModule(id: String): Boolean {
-    val cmd = "module restore $id"
-    val result = execKsud(cmd, true)
-    Log.i(TAG, "restore module $id result: $result")
-    return result
-}
-
+/**
+ * Get SELinux enforce status
+ */
 fun getSelinuxEnforce(): Boolean? {
-    return runCatching {
-        val out = ShellUtils.fastCmd("getenforce").trim()
-        when {
-            out.equals("Enforcing", ignoreCase = true) -> true
-            out.equals("Permissive", ignoreCase = true) -> false
+    return try {
+        val result = ShellUtils.fastCmd("getenforce").trim()
+        when (result.lowercase()) {
+            "enforcing" -> true
+            "permissive" -> false
             else -> null
         }
-    }.getOrNull()
+    } catch (e: Exception) {
+        null
+    }
 }
 
+/**
+ * Set SELinux enforce mode
+ */
 fun setSelinuxEnforce(enforce: Boolean): Boolean {
-    return runCatching {
-        val valStr = if (enforce) "1" else "0"
-        ShellUtils.fastCmdResult("setenforce $valStr")
-    }.getOrDefault(false)
-}
-
-private fun processUiPrintLine(s: String?): Pair<Int, String?> {
-    if (s == null) {
-        return Pair(1,null)
-    }
-
-    val check1 = s.startsWith("ui_print")
-    val trimmed = s.trim()
-    val check2 = trimmed.startsWith("ui_print")
-    if (!check1 && check2) return Pair(1,null)
-
-    return if(check1) {
-        Pair(1,trimmed.drop(8).dropWhile { it.isWhitespace() })
-    }
-    else {
-        Pair(2, trimmed)
+    return try {
+        val value = if (enforce) "1" else "0"
+        ShellUtils.fastCmdResult("setenforce $value")
+    } catch (e: Exception) {
+        false
     }
 }
 
-private fun flashWithIO_ak3(
-    cmd: String,
-    onStdout: (String) -> Unit,
-    onStderr: (String) -> Unit
-): Shell.Result {
-
-    val stdoutCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            val (type, text) = processUiPrintLine(s)
-            if(type == 1) {
-                text?.let(onStdout)
-            } else {
-                text?.let(onStderr)
-            }
-        }
-    }
-
-    val stderrCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStderr(s ?: "")
-        }
-    }
-
-    return withNewRootShell {
-        newJob().add(cmd).to(stdoutCallback, stderrCallback).exec()
+/**
+ * Get feature status - UI-Only mode returns simulated values
+ */
+fun getFeatureStatus(feature: String): String {
+    return when (feature) {
+        "avc_spoof" -> "supported"
+        "su_compat" -> "supported"
+        "kernel_umount" -> "supported"
+        else -> "unsupported"
     }
 }
 
-private fun flashWithIO(
-    cmd: String,
-    onStdout: (String) -> Unit,
-    onStderr: (String) -> Unit
-): Shell.Result {
-
-    val stdoutCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStdout(s ?: "")
-        }
-    }
-
-    val stderrCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStderr(s ?: "")
-        }
-    }
-
-    return withNewRootShell {
-        newJob().add(cmd).to(stdoutCallback, stderrCallback).exec()
-    }
+/**
+ * Toggle module state - UI-Only mode (simulated)
+ */
+fun toggleModule(moduleId: String, enable: Boolean): Boolean {
+    Log.i(TAG, "UI-Only: Toggling module $moduleId to $enable")
+    return true
 }
 
-fun flashModule(
-    uri: Uri,
-    onStdout: (String) -> Unit,
-    onStderr: (String) -> Unit
-): FlashResult {
-    val resolver = ksuApp.contentResolver
-    with(resolver.openInputStream(uri)) {
-        val file = File(ksuApp.cacheDir, "module.zip")
-        file.outputStream().use { output ->
-            this?.copyTo(output)
-        }
-        val cmd = "module install ${file.absolutePath}"
-        val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
-        Log.i("KernelSU", "install module $uri result: $result")
-
-        file.delete()
-
-        return FlashResult(result)
-    }
+/**
+ * Remove module - UI-Only mode (simulated)
+ */
+fun removeModule(moduleId: String): Boolean {
+    Log.i(TAG, "UI-Only: Removing module $moduleId")
+    return true
 }
 
-fun runModuleAction(
-    moduleId: String, onStdout: (String) -> Unit, onStderr: (String) -> Unit
-): Boolean {
-    val shell = createRootShell(true)
-
-    val stdoutCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStdout(s ?: "")
-        }
-    }
-
-    val stderrCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStderr(s ?: "")
-        }
-    }
-
-    val result = shell.newJob().add("${getKsuDaemonPath()} module action $moduleId")
-        .to(stdoutCallback, stderrCallback).exec()
-    Log.i("KernelSU", "Module runAction result: $result")
-
-    return result.isSuccess
+/**
+ * Check if module is enabled - UI-Only mode (always true)
+ */
+fun isModuleEnabled(moduleId: String): Boolean {
+    return true
 }
 
-fun reboot(reason: String = "") {
-    if (reason == "soft-reboot") {
-        // ksud (userspace)
-        com.ztros.ztrosu.ui.util.execKsud("soft-reboot")
-        return
-    }
-
-    if (reason == "recovery") {
-        // KEYCODE_POWER = 26, hide incorrect "Factory data reset" message
-        ShellUtils.fastCmdResult("/system/bin/input keyevent 26")
-    }
-    ShellUtils.fastCmdResult("/system/bin/svc power reboot $reason || /system/bin/reboot $reason")
+/**
+ * Get module version - UI-Only mode
+ */
+fun getModuleVersion(moduleId: String): String {
+    return "1.0.0"
 }
 
-fun flashAnyKernelZip(
-    uri: Uri,
-    onStdout: (String) -> Unit,
-    onStderr: (String) -> Unit
-): FlashResult {
-    val resolver = ksuApp.contentResolver
-
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val tmpFile = File(ksuApp.cacheDir, "anykernel_${timestamp}.zip")
-    resolver.openInputStream(uri).use { input ->
-        tmpFile.outputStream().use { out ->
-            input?.copyTo(out)
-        }
-    }
-
-    val destZip = tmpFile.absolutePath
-    val destZipName = File(destZip).name
-    val destDirFile = File(ksuApp.cacheDir, "anykernel3_${timestamp}")
-    val destDir = destDirFile.absolutePath
-
-    // Validate that the zip contains the required META-INF installer script
-    val hasInstaller = runCatching {
-        java.util.zip.ZipFile(tmpFile).use { zip ->
-            zip.getEntry("META-INF/com/google/android/update-binary") != null
-        }
-    }.getOrDefault(false)
-
-    if (!hasInstaller) {
-        tmpFile.delete()
-        val errMsg = "Invalid AnyKernel3 zip: META-INF/com/google/android/update-binary not found!"
-        onStderr(errMsg)
-        return FlashResult(1, "", false)
-    }
-
-    val cmd = """
-                mkdir -p '$destDir' && \
-                $BUSYBOX unzip -p -o '$destZip' "META-INF/com/google/android/update-binary" > '$destDir/update-binary' 2>/dev/null && \
-                cp '$destZip' '$destDir/$destZipName' 2>/dev/null || true && \
-                $BUSYBOX chmod 755 '$destDir/update-binary' && \
-                $BUSYBOX chown root:root '$destDir/update-binary' && \
-                (cd '$destDir' && \
-                    if [ -f './update-binary' ]; then \
-                        AKHOME='$destDir/tmp' $BUSYBOX ash '$destDir/update-binary' 3 1 '$destDir/$destZipName'; \
-                    else \
-                        echo 'No installer script found' >&2; exit 1; \
-                    fi)
-            """.trimIndent().replace(Regex("\\s+\\\\\\s*"), " ")
-
-    val result = flashWithIO_ak3(cmd, onStdout, onStderr)
-    try {
-        return FlashResult(result, result.isSuccess)
-    } finally {
-        try {
-            runCatching {
-                createRootShell(true).use { sh ->
-                    sh.newJob().add("rm -rf '$destDir' '$destZip'").exec()
-                }
-            }
-        } catch (_: Throwable) {
-        }
-    }
+/**
+ * Get module author - UI-Only mode
+ */
+fun getModuleAuthor(moduleId: String): String {
+    return "ZTR_OS"
 }
 
-fun rootAvailable() = Shell.isAppGrantedRoot() == true
-
-fun isInitBoot(): Boolean {
-    return !Os.uname().release.contains("android12-")
+/**
+ * Get module description - UI-Only mode
+ */
+fun getModuleDescription(moduleId: String): String {
+    return "UI-Only test module"
 }
 
-suspend fun isAbDevice(): Boolean = withContext(Dispatchers.IO) {
-    val cmd = "boot-info is-ab-device"
-    ShellUtils.fastCmd("${getKsuDaemonPath()} $cmd").trim().toBoolean()
+/**
+ * Get module update url - UI-Only mode
+ */
+fun getModuleUpdateUrl(moduleId: String): String? {
+    return null
 }
 
-suspend fun getDefaultPartition(): String = withContext(Dispatchers.IO) {
-    if (rootAvailable()) {
-        val cmd = "boot-info default-partition"
-        ShellUtils.fastCmd("${getKsuDaemonPath()} $cmd").trim()
-    } else {
-        if (!Os.uname().release.contains("android12-")) "init_boot" else "boot"
-    }
+/**
+ * Get module version code - UI-Only mode
+ */
+fun getModuleVersionCode(moduleId: String): Long {
+    return 1000L
 }
 
-suspend fun getSlotSuffix(ota: Boolean): String = withContext(Dispatchers.IO) {
-    val cmd = if (ota) {
-        "boot-info slot-suffix --ota"
-    } else {
-        "boot-info slot-suffix"
-    }
-    ShellUtils.fastCmd("${getKsuDaemonPath()} $cmd").trim()
+/**
+ * Get module size - UI-Only mode
+ */
+fun getModuleSize(moduleId: String): Long {
+    return 0L
 }
 
-suspend fun getAvailablePartitions(): List<String> = withContext(Dispatchers.IO) {
-    val shell = createRootShell(true)
-    val cmd = "boot-info available-partitions"
-    val out = shell.newJob().add("${getKsuDaemonPath()} $cmd").to(ArrayList(), null).exec().out
-    out.filter { it.isNotBlank() }.map { it.trim() }
+/**
+ * Get module last update - UI-Only mode
+ */
+fun getModuleLastUpdate(moduleId: String): Long {
+    return System.currentTimeMillis()
 }
 
-fun hasMagisk(): Boolean {
-    val result = ShellUtils.fastCmdResult("which magisk")
-    Log.i(TAG, "has magisk: $result")
-    return result
+/**
+ * List all modules - UI-Only mode (returns mock list)
+ */
+fun listModules(): List<String> {
+    return listOf("test_module_1", "test_module_2", "test_module_3")
 }
 
-fun isSepolicyValid(rules: String?): Boolean {
-    if (rules == null) {
-        return true
-    }
-    val result =
-        Shell.cmd("${getKsuDaemonPath()} sepolicy check '$rules'").to(ArrayList(), null)
-            .exec()
-    return result.isSuccess
-}
+/**
+ * Get module count
+ */
+fun getModuleCount(): Int = 3
 
-fun getSepolicy(pkg: String): String {
-    val result =
-        Shell.cmd("${getKsuDaemonPath()} profile get-sepolicy $pkg").to(ArrayList(), null)
-            .exec()
-    Log.i(TAG, "code: ${result.code}, out: ${result.out}, err: ${result.err}")
-    return result.out.joinToString("\n")
-}
+/**
+ * Get enabled module count
+ */
+fun getEnabledModuleCount(): Int = 3
 
-fun setSepolicy(pkg: String, rules: String): Boolean {
-    val result = Shell.cmd("${getKsuDaemonPath()} profile set-sepolicy $pkg '$rules'")
-        .to(ArrayList(), null).exec()
-    Log.i(TAG, "set sepolicy result: ${result.code}")
-    return result.isSuccess
-}
+/**
+ * Get disabled module count
+ */
+fun getDisabledModuleCount(): Int = 0
 
-fun listAppProfileTemplates(): List<String> {
-    return Shell.cmd("${getKsuDaemonPath()} profile list-templates").to(ArrayList(), null)
-        .exec().out
-}
-
-fun getAppProfileTemplate(id: String): String {
-    return Shell.cmd("${getKsuDaemonPath()} profile get-template '${id}'")
-        .to(ArrayList(), null).exec().out.joinToString("\n")
-}
-
-fun getFileName(context: Context, uri: Uri): String {
-    var name = "Unknown Module"
-    if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
-        val cursor: Cursor? = context.contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                name = it.getString(it.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-            }
-        }
-    } else if (uri.scheme == "file") {
-        name = uri.lastPathSegment ?: "Unknown Module"
-    }
-    return name
-}
-
-fun currentMountSystem(): String {
-    val result = ShellUtils.fastCmd("${getKsuDaemonPath()} module mount").trim()
-    return result.substringAfter(":").substringAfter(" ").trim()
-}
-
-fun getModuleSize(dir: File): Long {
-    val result = ShellUtils.fastCmd("$BUSYBOX du -sb '${dir.absolutePath}' | awk '{print $1}'").trim()
-    return result.toLongOrNull() ?: 0L
-}
-
-fun isSuCompatDisabled(): Boolean {
-    return !Natives.isSuEnabled()
-}
-
-fun zygiskRequired(dir: File): Boolean {
-    return (SuFile(dir, "zygisk").listFiles()?.size ?: 0) > 0
-}
-
-fun getZygiskImplementation(property: String): String {
-    val modulesPath = "/data/adb/modules"
-    val zygiskModuleIds = arrayOf("rezygisk", "zygisksu")
-
-    for (moduleId in zygiskModuleIds) {
-        val moduleDir = SuFile.open("$modulesPath/$moduleId")
-        if (!moduleDir.isDirectory) continue
-        if (SuFile.open("$modulesPath/$moduleId/disable").isFile ||
-            SuFile.open("$modulesPath/$moduleId/remove").isFile
-        ) continue
-
-        val propFile = SuFile.open("$modulesPath/$moduleId/module.prop")
-        if (!propFile.isFile) continue
-
-        val prop = Properties().apply { load(propFile.newInputStream()) }
-        prop.getProperty(property)?.let {
-            Log.i(TAG, "Zygisk $property: $it")
-            return it
-        }
-    }
-
-    Log.i(TAG, "Zygisk $property: None")
-    return "None"
-}
-
-fun refreshActivity(context: Context) {
-    if (context is Activity) {
-        context.recreate()
-    }
-}
-
-fun restartActivity(context: Context) {
-    val packageManager = context.packageManager
-    val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-    intent?.addFlags(
-        Intent.FLAG_ACTIVITY_NEW_TASK or
-        Intent.FLAG_ACTIVITY_CLEAR_TASK or
-        Intent.FLAG_ACTIVITY_CLEAR_TOP
+/**
+ * Get module info - UI-Only mode
+ */
+fun getModuleInfo(moduleId: String): ModuleInfo {
+    return ModuleInfo(
+        id = moduleId,
+        name = "Test Module",
+        version = "1.0.0",
+        versionCode = 1000,
+        author = "ZTR_OS",
+        description = "UI-Only test module",
+        enabled = true,
+        updateUrl = null,
+        size = 0,
+        lastUpdate = System.currentTimeMillis()
     )
-    context.startActivity(intent)
-    if (context is Activity) {
-        context.finish()
+}
+
+@Parcelize
+data class ModuleInfo(
+    val id: String,
+    val name: String,
+    val version: String,
+    val versionCode: Long,
+    val author: String,
+    val description: String,
+    val enabled: Boolean,
+    val updateUrl: String?,
+    val size: Long,
+    val lastUpdate: Long
+) : Parcelable
+
+/**
+ * Get superuser list - UI-Only mode (returns mock list)
+ */
+fun getSuperuserList(): List<SuperuserInfo> {
+    return listOf(
+        SuperuserInfo(1000, "android", true),
+        SuperuserInfo(2000, "shell", true),
+        SuperuserInfo(9999, "test_app", false)
+    )
+}
+
+@Parcelize
+data class SuperuserInfo(
+    val uid: Int,
+    val packageName: String,
+    val allowed: Boolean
+) : Parcelable
+
+/**
+ * Allow superuser - UI-Only mode
+ */
+fun allowSuperuser(uid: Int): Boolean {
+    Log.i(TAG, "UI-Only: Allowing superuser for uid $uid")
+    return true
+}
+
+/**
+ * Deny superuser - UI-Only mode
+ */
+fun denySuperuser(uid: Int): Boolean {
+    Log.i(TAG, "UI-Only: Denying superuser for uid $uid")
+    return true
+}
+
+/**
+ * Revoke superuser - UI-Only mode
+ */
+fun revokeSuperuser(uid: Int): Boolean {
+    Log.i(TAG, "UI-Only: Revoking superuser for uid $uid")
+    return true
+}
+
+/**
+ * Get app profile - UI-Only mode
+ */
+fun getAppProfile(uid: Int): AppProfile? {
+    return AppProfile(
+        uid = uid,
+        allowSu = true,
+        rootUseDefault = true,
+        rootTemplate = null,
+        umountModules = false
+    )
+}
+
+@Parcelize
+data class AppProfile(
+    val uid: Int,
+    val allowSu: Boolean,
+    val rootUseDefault: Boolean,
+    val rootTemplate: String?,
+    val umountModules: Boolean
+) : Parcelable
+
+/**
+ * Set app profile - UI-Only mode
+ */
+fun setAppProfile(profile: AppProfile): Boolean {
+    Log.i(TAG, "UI-Only: Setting app profile for uid ${profile.uid}")
+    return true
+}
+
+/**
+ * Get profile template - UI-Only mode
+ */
+fun getProfileTemplates(): List<String> {
+    return listOf("default", "none", "inherited")
+}
+
+/**
+ * Save profile template - UI-Only mode
+ */
+fun saveProfileTemplate(name: String, template: String): Boolean {
+    Log.i(TAG, "UI-Only: Saving profile template $name")
+    return true
+}
+
+/**
+ * Delete profile template - UI-Only mode
+ */
+fun deleteProfileTemplate(name: String): Boolean {
+    Log.i(TAG, "UI-Only: Deleting profile template $name")
+    return true
+}
+
+/**
+ * Get backup list - UI-Only mode
+ */
+fun getBackupList(): List<String> {
+    return emptyList()
+}
+
+/**
+ * Restore backup - UI-Only mode
+ */
+fun restoreBackup(name: String): Boolean {
+    Log.i(TAG, "UI-Only: Restoring backup $name")
+    return true
+}
+
+/**
+ * Delete backup - UI-Only mode
+ */
+fun deleteBackup(name: String): Boolean {
+    Log.i(TAG, "UI-Only: Deleting backup $name")
+    return true
+}
+
+/**
+ * Get log path - UI-Only mode
+ */
+fun getLogPath(): String {
+    return "/data/local/tmp/ksu_log.txt"
+}
+
+/**
+ * Clear logs - UI-Only mode
+ */
+fun clearLogs(): Boolean {
+    Log.i(TAG, "UI-Only: Clearing logs")
+    return true
+}
+
+/**
+ * Get bug report - UI-Only mode
+ */
+fun getBugreportFile(activity: Activity): File {
+    return File(activity.cacheDir, "bugreport.txt").apply {
+        writeText("UI-Only Mode Bug Report\nGenerated: ${Date()}\n")
     }
 }
 
-fun getSuSFS(): String {
-    return ShellUtils.fastCmd("$suSFSDaemonPath support")
+/**
+ * Restart activity
+ */
+fun restartActivity(activity: Activity) {
+    val intent = activity.intent
+    activity.finish()
+    activity.startActivity(intent)
 }
 
-fun getSuSFSVersion(): String {
-    return ShellUtils.fastCmd("$suSFSDaemonPath version")
+/**
+ * Refresh activity
+ */
+fun refreshActivity(activity: Activity) {
+    restartActivity(activity)
 }
 
-fun getSuSFSVariant(): String {
-    return ShellUtils.fastCmd("$suSFSDaemonPath variant")
+/**
+ * Check if module is exist - UI-Only mode
+ */
+fun isModuleExist(moduleId: String): Boolean {
+    return listModules().contains(moduleId)
 }
 
-fun getSuSFSFeatures(): String {
-    return ShellUtils.fastCmd("$suSFSDaemonPath features")
+/**
+ * Check if module has webui - UI-Only mode
+ */
+fun hasWebUI(moduleId: String): Boolean {
+    return false
 }
 
-fun setAppProfileTemplate(id: String, template: String): Boolean {
-    val escapedTemplate = template.replace("\"", "\\\"")
-    val cmd = """${getKsuDaemonPath()} profile set-template "$id" "$escapedTemplate'""""
-    return Shell.cmd(cmd)
-        .to(ArrayList(), null).exec().isSuccess
+/**
+ * Get module webui path - UI-Only mode
+ */
+fun getModuleWebUIPath(moduleId: String): String? {
+    return null
 }
 
-fun deleteAppProfileTemplate(id: String): Boolean {
-    return Shell.cmd("${getKsuDaemonPath()} profile delete-template '${id}'")
-        .to(ArrayList(), null).exec().isSuccess
+/**
+ * Open module webui - UI-Only mode
+ */
+fun openModuleWebUI(activity: Activity, moduleId: String) {
+    // No-op in UI-Only mode
 }
 
-fun forceStopApp(packageName: String) {
-    val result = Shell.cmd("am force-stop $packageName").exec()
-    Log.i(TAG, "force stop $packageName result: $result")
+/**
+ * Install module from url - UI-Only mode
+ */
+suspend fun installModule(url: String, onFinish: (Boolean) -> Unit) {
+    Log.i(TAG, "UI-Only: Installing module from $url")
+    onFinish(true)
 }
 
-fun launchApp(packageName: String) {
-    val result =
-        Shell.cmd("cmd package resolve-activity --brief $packageName | tail -n 1 | xargs cmd activity start-activity -n")
-            .exec()
-    Log.i(TAG, "launch $packageName result: $result")
+/**
+ * Check for module update - UI-Only mode
+ */
+suspend fun checkModuleUpdate(moduleId: String): Boolean {
+    return false
 }
 
-fun restartApp(packageName: String) {
-    forceStopApp(packageName)
-    launchApp(packageName)
+/**
+ * Get module update info - UI-Only mode
+ */
+fun getModuleUpdateInfo(moduleId: String): ModuleUpdateInfo? {
+    return null
+}
+
+@Parcelize
+data class ModuleUpdateInfo(
+    val version: String,
+    val versionCode: Long,
+    val zipUrl: String,
+    val changelog: String
+) : Parcelable
+
+/**
+ * Update module - UI-Only mode
+ */
+suspend fun updateModule(moduleId: String, onFinish: (Boolean) -> Unit) {
+    Log.i(TAG, "UI-Only: Updating module $moduleId")
+    onFinish(true)
+}
+
+/**
+ * Get version name - UI-Only mode
+ */
+fun getVersionName(): String {
+    return "1.0.0"
+}
+
+/**
+ * Get version code - UI-Only mode
+ */
+fun getVersionCode(): Long {
+    return 1000L
+}
+
+/**
+ * Check for update - UI-Only mode
+ */
+suspend fun checkForUpdate(): Boolean {
+    return false
+}
+
+/**
+ * Get update info - UI-Only mode
+ */
+fun getUpdateInfo(): UpdateInfo? {
+    return null
+}
+
+@Parcelize
+data class UpdateInfo(
+    val version: String,
+    val versionCode: Long,
+    val apkUrl: String,
+    val changelog: String
+) : Parcelable
+
+/**
+ * Download and install update - UI-Only mode
+ */
+suspend fun downloadAndInstallUpdate(onProgress: (Int) -> Unit, onFinish: (Boolean) -> Unit) {
+    onFinish(false)
+}
+
+/**
+ * Get default umount modules - UI-Only mode
+ */
+fun isDefaultUmountModules(): Boolean {
+    return false
+}
+
+/**
+ * Set default umount modules - UI-Only mode
+ */
+fun setDefaultUmountModules(umount: Boolean): Boolean {
+    Log.i(TAG, "UI-Only: Setting default umount modules to $umount")
+    return true
 }

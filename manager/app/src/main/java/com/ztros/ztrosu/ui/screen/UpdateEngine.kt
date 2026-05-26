@@ -29,7 +29,7 @@ import com.ztros.ztrosu.ui.LocalScrollState
 import com.ztros.ztrosu.ui.component.rememberLoadingDialog
 import com.ztros.ztrosu.ui.rememberScrollConnection
 import com.ztros.ztrosu.ui.util.LocalSnackbarHost
-import com.topjohnwu.superuser.ShellUtils
+import com.ztros.ztrosu.ui.util.ShellUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

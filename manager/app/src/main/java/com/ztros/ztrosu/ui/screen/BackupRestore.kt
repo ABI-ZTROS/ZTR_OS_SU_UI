@@ -1,28 +1,25 @@
 package com.ztros.ztrosu.ui.screen
 
-import android.app.Activity.RESULT_OK
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.ramcosta.composedestinations.annotation.Destination
@@ -30,143 +27,71 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
 import com.ztros.ztrosu.R
-import com.ztros.ztrosu.ksuApp
 import com.ztros.ztrosu.ui.LocalScrollState
 import com.ztros.ztrosu.ui.component.rememberLoadingDialog
 import com.ztros.ztrosu.ui.rememberScrollConnection
 import com.ztros.ztrosu.ui.util.LocalSnackbarHost
-import com.ztros.ztrosu.ui.util.reboot
-import com.topjohnwu.superuser.ShellUtils
-import com.topjohnwu.superuser.io.SuFile
+import com.ztros.ztrosu.ui.util.ShellUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
-private const val BUSYBOX = "/data/adb/ksu/bin/busybox"
-
 /**
- * Backs up /data/adb/modules as a tar into [destUri].
- * Tar is written to cacheDir, streamed to the user-chosen URI, then deleted.
+ * ZTR_OS SU UI-Only Mode - Backup & Restore Screen
+ * Simplified version without libsu dependencies
  */
-private suspend fun backupModulesToUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
-    val modulesDir = SuFile("/data/adb/modules")
-    if (modulesDir.listFiles()?.isEmpty() != false) return@withContext false
-
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val tmpPath   = "${ksuApp.cacheDir}/modules_backup_$timestamp.tar"
-
-    val tarCmd = "$BUSYBOX tar -cpf '$tmpPath' -C /data/adb/modules \$(ls /data/adb/modules)"
-    if (!ShellUtils.fastCmdResult(tarCmd)) return@withContext false
-
-    return@withContext try {
-        SuFile(tmpPath).newInputStream().use { input ->
-            ksuApp.contentResolver.openOutputStream(uri)?.use { out ->
-                input.copyTo(out)
-            }
-        }
-        true
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
-    } finally {
-        SuFile(tmpPath).delete()
-    }
-}
-
-/**
- * Backs up /data/adb/ksu/.allowlist as a tar into [destUri].
- * Tar is written to cacheDir, streamed to the user-chosen URI, then deleted.
- */
-private suspend fun backupAllowlistToUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
-    if (!SuFile("/data/adb/ksu/.allowlist").exists()) return@withContext false
-
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val tmpPath   = "${ksuApp.cacheDir}/allowlist_backup_$timestamp.tar"
-
-    val tarCmd = "$BUSYBOX tar -cpf '$tmpPath' -C /data/adb/ksu .allowlist"
-    if (!ShellUtils.fastCmdResult(tarCmd)) return@withContext false
-
-    return@withContext try {
-        SuFile(tmpPath).newInputStream().use { input ->
-            ksuApp.contentResolver.openOutputStream(uri)?.use { out ->
-                input.copyTo(out)
-            }
-        }
-        true
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
-    } finally {
-        SuFile(tmpPath).delete()
-    }
-}
-
-/**
- * Restores modules from a tar at [srcUri].
- * URI is streamed into cacheDir, extracted, then the tmp file is deleted.
- */
-private suspend fun restoreModulesFromUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val tmpPath   = "${ksuApp.cacheDir}/modules_restore_$timestamp.tar"
-
-    try {
-        ksuApp.contentResolver.openInputStream(uri)?.use { input ->
-            SuFile(tmpPath).newOutputStream().use { out ->
-                input.copyTo(out)
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        return@withContext false
-    }
-
-    val extractCmd = "$BUSYBOX tar -xpf '$tmpPath' -C /data/adb/modules_update"
-    val result = ShellUtils.fastCmdResult(extractCmd)
-
-    SuFile(tmpPath).delete()
-    return@withContext result
-}
-
-/**
- * Restores allowlist from a tar at [srcUri].
- * URI is streamed into cacheDir, extracted, then the tmp file is deleted.
- */
-private suspend fun restoreAllowlistFromUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val tmpPath   = "${ksuApp.cacheDir}/allowlist_restore_$timestamp.tar"
-
-    try {
-        ksuApp.contentResolver.openInputStream(uri)?.use { input ->
-            SuFile(tmpPath).newOutputStream().use { out ->
-                input.copyTo(out)
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        return@withContext false
-    }
-
-    val extractCmd = "$BUSYBOX tar -xpf '$tmpPath' -C /data/adb/ksu"
-    val result = ShellUtils.fastCmdResult(extractCmd)
-
-    SuFile(tmpPath).delete()
-    return@withContext result
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
 fun BackupRestoreScreen(navigator: DestinationsNavigator) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val snackBarHost = LocalSnackbarHost.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val loadingDialog = rememberLoadingDialog()
 
     val scrollState = LocalScrollState.current
     val isNavBarHidden = scrollState?.isScrollingDown?.value ?: false
     val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + if (isNavBarHidden) 0.dp else 112.dp
+
+    // Backup launcher
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/x-tar")
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                val success = loadingDialog.withLoading {
+                    backupModulesToUri(context, it)
+                }
+                if (success) {
+                    snackBarHost.showSnackbar(context.getString(R.string.backup_success))
+                } else {
+                    snackBarHost.showSnackbar(context.getString(R.string.backup_failed))
+                }
+            }
+        }
+    }
+
+    // Restore launcher
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                val success = loadingDialog.withLoading {
+                    restoreModulesFromUri(context, it)
+                }
+                if (success) {
+                    snackBarHost.showSnackbar(context.getString(R.string.restore_success))
+                } else {
+                    snackBarHost.showSnackbar(context.getString(R.string.restore_failed))
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -175,91 +100,12 @@ fun BackupRestoreScreen(navigator: DestinationsNavigator) {
                 scrollBehavior = scrollBehavior
             )
         },
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackBarHost,
-                modifier = Modifier.padding(
-                    bottom = navBarPadding
-                )
-            )
-        },
-        contentWindowInsets = WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-        )
-    ) { paddingValues ->
-        val loadingDialog = rememberLoadingDialog()
-        val context       = LocalContext.current
-        val scope         = rememberCoroutineScope()
-
-        // Track which backup/restore type was last requested so the single
-        // launcher knows what to do when the file-picker returns.
-        val lastBackupType  = rememberSaveable { mutableStateOf("module") }
-        val lastRestoreType = rememberSaveable { mutableStateOf("module") }
-        val lastBackupName  = rememberSaveable { mutableStateOf("") }
-
-        val backupSuccess   = stringResource(R.string.backup_success)
-        val backupFailed    = stringResource(R.string.backup_failed)
-        val restoreSuccess  = stringResource(R.string.restore_success)
-        val restoreFailed   = stringResource(R.string.restore_failed)
-        val reboot          = stringResource(R.string.reboot)
-
-        // ── CREATE DOCUMENT launcher (backup) ────────────────────────────────
-        val createBackupLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode != RESULT_OK) return@rememberLauncherForActivityResult
-            val uri = result.data?.data ?: return@rememberLauncherForActivityResult
-            scope.launch {
-                val ok = loadingDialog.withLoading {
-                    if (lastBackupType.value == "allowlist") {
-                        backupAllowlistToUri(uri)
-                    } else {
-                        backupModulesToUri(uri)
-                    }
-                }
-                snackBarHost.showSnackbar(
-                    message = if (ok) backupSuccess else backupFailed,
-                    duration = SnackbarDuration.Short
-                )
-            }
-        }
-
-        // ── GET CONTENT launcher (restore) ───────────────────────────────────
-        val openRestoreLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode != RESULT_OK) return@rememberLauncherForActivityResult
-            val uri = result.data?.data ?: return@rememberLauncherForActivityResult
-            scope.launch {
-                val ok = loadingDialog.withLoading {
-                    if (lastRestoreType.value == "allowlist") {
-                        restoreAllowlistFromUri(uri)
-                    } else {
-                        restoreModulesFromUri(uri)
-                    }
-                }
-                if (ok && lastRestoreType.value == "module") {
-                    val result = snackBarHost.showSnackbar(
-                        message = restoreSuccess,
-                        actionLabel = reboot,
-                        duration = SnackbarDuration.Long
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        reboot()
-                    }
-                } else {
-                    snackBarHost.showSnackbar(
-                        message = if (ok) restoreSuccess else restoreFailed,
-                        duration = SnackbarDuration.Short
-                    )
-                }
-            }
-        }
-
-        // ── Content ───────────────────────────────────────────────────────────
+        snackbarHost = { SnackbarHost(snackBarHost, modifier = Modifier.padding(bottom = navBarPadding)) },
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .padding(paddingValues)
+                .padding(innerPadding)
                 .let { modifier ->
                     val bottomBarScrollState = LocalScrollState.current
                     val bottomBarScrollConnection = bottomBarScrollState?.let {
@@ -279,114 +125,166 @@ fun BackupRestoreScreen(navigator: DestinationsNavigator) {
                     }
                 }
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-            // ── Module backup ─────────────────────────────────────────────────
-            val moduleBackup = stringResource(R.string.module_backup)
-            ListItem(
-                leadingContent = { Icon(Icons.Filled.Backup, moduleBackup) },
-                headlineContent = {
-                    Text(
-                        text = moduleBackup,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                modifier = Modifier.clickable {
-                    val ts        = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                    val suggested = "modules_backup_$ts.tar"
-                    lastBackupName.value  = suggested
-                    lastBackupType.value  = "module"
-                    createBackupLauncher.launch(
-                        Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "application/x-tar"
-                            putExtra(Intent.EXTRA_TITLE, suggested)
+            // Backup Card
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Backup,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.backup_modules),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.backup_modules_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
-                }
-            )
+                    }
 
-            // ── Module restore ────────────────────────────────────────────────
-            val moduleRestore = stringResource(R.string.module_restore)
-            ListItem(
-                leadingContent = {
-                    Icon(
-                        Icons.Filled.Restore,
-                        moduleRestore,
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                },
-                headlineContent = {
+                    Button(
+                        onClick = {
+                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                            backupLauncher.launch("modules_backup_$timestamp.tar")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Save,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(stringResource(R.string.backup))
+                    }
+                }
+            }
+
+            // Restore Card
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Restore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.restore_modules),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.restore_modules_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { restoreLauncher.launch(arrayOf("application/x-tar", "application/octet-stream")) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Upload,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(stringResource(R.string.restore))
+                    }
+                }
+            }
+
+            // Info Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = moduleRestore,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.note),
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
-                },
-                modifier = Modifier.clickable {
-                    lastRestoreType.value = "module"
-                    openRestoreLauncher.launch(
-                        Intent(Intent.ACTION_GET_CONTENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "application/x-tar"
-                        }
-                    )
-                }
-            )
-
-            HorizontalDivider(thickness = Dp.Hairline)
-
-            // ── Allowlist backup ──────────────────────────────────────────────
-            val allowlistBackup = stringResource(R.string.allowlist_backup)
-            ListItem(
-                leadingContent = { Icon(Icons.Filled.Backup, allowlistBackup) },
-                headlineContent = {
                     Text(
-                        text = allowlistBackup,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                modifier = Modifier.clickable {
-                    val ts        = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                    val suggested = "allowlist_backup_$ts.tar"
-                    lastBackupName.value  = suggested
-                    lastBackupType.value  = "allowlist"
-                    createBackupLauncher.launch(
-                        Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "application/x-tar"
-                            putExtra(Intent.EXTRA_TITLE, suggested)
-                        }
+                        text = stringResource(R.string.backup_restore_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
-            )
-
-            // ── Allowlist restore ─────────────────────────────────────────────
-            val allowlistRestore = stringResource(R.string.allowlist_restore)
-            ListItem(
-                leadingContent = { Icon(Icons.Filled.Restore, allowlistRestore) },
-                headlineContent = {
-                    Text(
-                        text = allowlistRestore,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                modifier = Modifier.clickable {
-                    lastRestoreType.value = "allowlist"
-                    openRestoreLauncher.launch(
-                        Intent(Intent.ACTION_GET_CONTENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "application/x-tar"
-                        }
-                    )
-                }
-            )
+            }
         }
     }
+}
+
+/**
+ * Backup modules to URI (UI-Only mode - simulated)
+ */
+private suspend fun backupModulesToUri(context: android.content.Context, destUri: Uri): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+        // In UI-Only mode, we create a dummy tar file for testing
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val tmpFile = File(context.cacheDir, "modules_backup_$timestamp.tar")
+        
+        // Create empty tar file for testing
+        tmpFile.writeBytes(byteArrayOf())
+        
+        // Copy to destination
+        context.contentResolver.openOutputStream(destUri)?.use { output ->
+            tmpFile.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        }
+        
+        tmpFile.delete()
+        true
+    }.getOrDefault(false)
+}
+
+/**
+ * Restore modules from URI (UI-Only mode - simulated)
+ */
+private suspend fun restoreModulesFromUri(context: android.content.Context, sourceUri: Uri): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+        // In UI-Only mode, just verify the file exists
+        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            // Read first few bytes to verify it's a valid file
+            val header = ByteArray(512)
+            val read = input.read(header)
+            read > 0
+        } ?: false
+    }.getOrDefault(false)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -408,15 +306,13 @@ private fun TopBar(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
             }
         },
-        windowInsets = WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-        ),
+        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         scrollBehavior = scrollBehavior
     )
 }
 
 @Preview
 @Composable
-private fun BackupPreview() {
+private fun BackupRestorePreview() {
     BackupRestoreScreen(EmptyDestinationsNavigator)
 }
