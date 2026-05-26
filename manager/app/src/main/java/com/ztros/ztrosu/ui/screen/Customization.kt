@@ -2,30 +2,36 @@ package com.ztros.ztrosu.ui.screen
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Contrast
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import com.ztros.ztrosu.ui.LocalScrollState
-import com.ztros.ztrosu.ui.rememberScrollConnection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.ztros.ztrosu.ui.MainActivity
 import com.maxkeppeker.sheets.core.models.base.Header
@@ -39,16 +45,21 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
 import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.R
-import com.ztros.ztrosu.ksuApp
+import com.ztros.ztrosu.ui.LocalWallpaperUri
+import com.ztros.ztrosu.ui.LocalCardTransparency
 import com.ztros.ztrosu.ui.component.SwitchItem
 import com.ztros.ztrosu.ui.component.rememberCustomDialog
+import com.ztros.ztrosu.ui.component.rememberConfirmDialog
+import com.ztros.ztrosu.ui.component.ConfirmResult
 import com.ztros.ztrosu.ui.util.refreshActivity
 import com.ztros.ztrosu.ui.util.LocalSnackbarHost
 import com.ztros.ztrosu.ui.util.LocaleHelper
+import com.ztros.ztrosu.ui.util.ShellUtils
 
 /**
  * @author twj
  * @date 2025/6/1.
+ * ZTR_OS SU UI-Only Mode - Enhanced Customization
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -58,7 +69,7 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
     // Bottom bar scroll tracking
     val bottomBarScrollState = LocalScrollState.current
     val bottomBarScrollConnection = if (bottomBarScrollState != null) {
-        rememberScrollConnection(
+        com.ztros.ztrosu.ui.rememberScrollConnection(
             isScrollingDown = bottomBarScrollState.isScrollingDown,
             scrollOffset = bottomBarScrollState.scrollOffset,
             previousScrollOffset = bottomBarScrollState.previousScrollOffset,
@@ -73,6 +84,33 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
     val scrollState = LocalScrollState.current
     val isNavBarHidden = scrollState?.isScrollingDown?.value ?: false
     val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + if (isNavBarHidden) 0.dp else 112.dp
+
+    // Card transparency state
+    val cardTransparency = LocalCardTransparency.current
+    val prefs = LocalContext.current.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    
+    // Wallpaper state
+    val wallpaperUri = LocalWallpaperUri.current
+
+    // Image picker for wallpaper
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            // Save wallpaper URI to preferences
+            prefs.edit { putString("wallpaper_uri", uri.toString()) }
+            // Update wallpaper state to trigger recomposition
+            (LocalContext.current as? MainActivity)?.setWallpaperUri(uri)
+        }
+    }
+
+    // Clear wallpaper confirmation dialog
+    val clearWallpaperDialog = rememberConfirmDialog()
+    val clearConfirmText = stringResource(R.string.confirm)
+    val cancelText = stringResource(R.string.cancel)
+    val clearWallpaperTitle = stringResource(R.string.clear_wallpaper_title)
+    val clearWallpaperContent = stringResource(R.string.clear_wallpaper_content)
+    val snackbarMessage = stringResource(R.string.wallpaper_cleared)
 
     Scaffold(
         topBar = {
@@ -100,274 +138,434 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                     }
                 }
                 .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
-
-            val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-
-            // Track language state with current app locale
-            var currentAppLocale by remember { mutableStateOf(LocaleHelper.getCurrentAppLocale(context)) }
-            
-            // Listen for preference changes
-            LaunchedEffect(Unit) {
-                currentAppLocale = LocaleHelper.getCurrentAppLocale(context)
-            }
-
-            // Language setting with selection dialog
-            val languageDialog = rememberCustomDialog { dismiss ->
-                // Check if should use system language settings
-                if (LocaleHelper.useSystemLanguageSettings) {
-                    // Android 13+ - Jump to system settings
-                    LocaleHelper.launchSystemLanguageSettings(context)
-                    dismiss()
-                } else {
-                    // Android < 13 - Show app language selector
-                    // Dynamically detect supported locales from resources
-                    val supportedLocales = remember {
-                        val locales = mutableListOf<java.util.Locale>()
-                        
-                        // Add system default first
-                        locales.add(java.util.Locale.ROOT) // This will represent "System Default"
-                        
-                        // Dynamically detect available locales by checking resource directories
-                        val resourceDirs = listOf(
-                            "ar", "bg", "de", "fa", "fr", "hu", "in", "it", 
-                            "ja", "ko", "pl", "pt-rBR", "ru", "th", "tr", 
-                            "uk", "vi", "zh-rCN", "zh-rTW"
-                        )
-                        
-                        resourceDirs.forEach { dir ->
-                            try {
-                                val locale = when {
-                                    dir.contains("-r") -> {
-                                        val parts = dir.split("-r")
-                                        java.util.Locale.Builder()
-                                            .setLanguage(parts[0])
-                                            .setRegion(parts[1])
-                                            .build()
-                                    }
-                                    else -> java.util.Locale.Builder()
-                                        .setLanguage(dir)
-                                        .build()
-                                }
-                                
-                                // Test if this locale has translated resources
-                                val config = android.content.res.Configuration()
-                                config.setLocale(locale)
-                                val localizedContext = context.createConfigurationContext(config)
-                                
-                                // Try to get a translated string to verify the locale is supported
-                                val testString = localizedContext.getString(R.string.settings_language)
-                                val defaultString = context.getString(R.string.settings_language)
-                                
-                                // If the string is different or it's English, it's supported
-                                if (testString != defaultString || locale.language == "en") {
-                                    locales.add(locale)
-                                }
-                            } catch (_: Exception) {
-                                // Skip unsupported locales
-                            }
-                        }
-                        
-                        // Sort by display name
-                        val sortedLocales = locales.drop(1).sortedBy { it.getDisplayName(it) }
-                        mutableListOf<java.util.Locale>().apply {
-                            add(locales.first()) // System default first
-                            addAll(sortedLocales)
-                        }
-                    }
-                    
-                    val allOptions = supportedLocales.map { locale ->
-                        val tag = if (locale == java.util.Locale.ROOT) {
-                            "system"
-                        } else if (locale.country.isEmpty()) {
-                            locale.language
-                        } else {
-                            "${locale.language}_${locale.country}"
-                        }
-                        
-                        val displayName = if (locale == java.util.Locale.ROOT) {
-                            context.getString(R.string.system_default)
-                        } else {
-                            locale.getDisplayName(locale)
-                        }
-                        
-                        tag to displayName
-                    }
-                    
-                    val currentLocale = prefs.getString("app_locale", "system") ?: "system"
-                    val options = allOptions.map { (tag, displayName) ->
-                        ListOption(
-                            titleText = displayName,
-                            selected = currentLocale == tag
-                        )
-                    }
-                    
-                    var selectedIndex by remember { 
-                        mutableIntStateOf(allOptions.indexOfFirst { (tag, _) -> currentLocale == tag })
-                    }
-                    
-                    ListDialog(
-                        state = rememberUseCaseState(
-                            visible = true,
-                            onFinishedRequest = {
-                                if (selectedIndex >= 0 && selectedIndex < allOptions.size) {
-                                    val newLocale = allOptions[selectedIndex].first
-                                    prefs.edit { putString("app_locale", newLocale) }
-                                    
-                                    // Update local state immediately
-                                    currentAppLocale = LocaleHelper.getCurrentAppLocale(context)
-                                    
-                                    // Apply locale change immediately for Android < 13
-                                    refreshActivity(context)
-                                }
-                                dismiss()
-                            },
-                            onCloseRequest = {
-                                dismiss()
-                            }
-                        ),
-                        header = Header.Default(
-                            title = stringResource(R.string.settings_language),
-                        ),
-                        selection = ListSelection.Single(
-                            showRadioButtons = true,
-                            options = options
-                        ) { index, _ ->
-                            selectedIndex = index
-                        }
-                    )
-                }
-            }
-
-            val language = stringResource(id = R.string.settings_language)
-            
-            // Compute display name based on current app locale (similar to the reference implementation)
-            val currentLanguageDisplay = remember(currentAppLocale) {
-                val locale = currentAppLocale
-                if (locale != null) {
-                    locale.getDisplayName(locale)
-                } else {
-                    context.getString(R.string.system_default)
-                }
-            }
-            
-            ListItem(
-                leadingContent = { Icon(Icons.Filled.Translate, language) },
-                headlineContent = { Text(
-                    text = language,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                ) },
-                supportingContent = { Text(currentLanguageDisplay) },
-                modifier = Modifier.clickable {
-                    languageDialog.show()
-                }
+            // ============ 界面设置 Section ============
+            Text(
+                text = stringResource(R.string.interface_settings),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            // Theme style selection
-            val themeStyleTitle = stringResource(R.string.theme_style_title)
-            val themeStyleSummary = stringResource(R.string.theme_style_summary)
-
-            val themeStyles = listOf(
-                "wild" to stringResource(R.string.theme_style_wild),
-                "md3" to stringResource(R.string.theme_style_md3),
-                "miui_x" to stringResource(R.string.theme_style_miui_x)
-            )
-
-            val currentThemeStyle = prefs.getString("theme_style", "wild") ?: "wild"
-            val currentThemeDisplay = themeStyles.firstOrNull { it.first == currentThemeStyle }?.second
-                ?: themeStyles[0].second
-
-            val themeStyleDialog = rememberCustomDialog { dismiss ->
-                val options = themeStyles.map { (_, displayName) ->
-                    ListOption(
-                        titleText = displayName,
-                        selected = currentThemeStyle == themeStyles.first { it.second == displayName }.first
-                    )
-                }
-
-                var selectedIndex by remember {
-                    mutableIntStateOf(themeStyles.indexOfFirst { it.first == currentThemeStyle }.coerceAtLeast(0))
-                }
-
-                ListDialog(
-                    state = rememberUseCaseState(
-                        visible = true,
-                        onFinishedRequest = {
-                            if (selectedIndex >= 0 && selectedIndex < themeStyles.size) {
-                                val newStyle = themeStyles[selectedIndex].first
-                                prefs.edit { putString("theme_style", newStyle) }
-                                // Theme will be applied on next app restart
-                                refreshActivity(context)
-                            }
-                            dismiss()
-                        },
-                        onCloseRequest = {
-                            dismiss()
-                        }
-                    ),
-                    header = Header.Default(
-                        title = themeStyleTitle,
-                    ),
-                    selection = ListSelection.Single(
-                        showRadioButtons = true,
-                        options = options
-                    ) { index, _ ->
-                        selectedIndex = index
-                    }
-                )
-            }
-
-            ListItem(
-                leadingContent = { Icon(Icons.Filled.Palette, themeStyleTitle) },
-                headlineContent = { Text(
-                    text = themeStyleTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                ) },
-                supportingContent = { Text(currentThemeDisplay) },
-                modifier = Modifier.clickable {
-                    themeStyleDialog.show()
-                }
-            )
-
-            var useBanner by rememberSaveable {
-                mutableStateOf(
-                    prefs.getBoolean("use_banner", true)
-                )
-            }
-            if (ksuVersion != null) {
-                SwitchItem(
-                    icon = Icons.Filled.ViewCarousel,
-                    title = stringResource(id = R.string.settings_banner),
-                    summary = stringResource(id = R.string.settings_banner_summary),
-                    checked = useBanner
+            // Card 1: UI Card Transparency
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    prefs.edit { putBoolean("use_banner", it) }
-                    useBanner = it
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.FilledOpacity,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.card_transparency),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.card_transparency_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Transparency slider
+                    val transparencyValue = rememberSaveable { 
+                        mutableFloatStateOf(prefs.getFloat("card_transparency", 0.95f))
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(R.string.opaque),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Slider(
+                            value = transparencyValue.value,
+                            onValueChange = { newValue ->
+                                transparencyValue.value = newValue
+                            },
+                            onValueChangeFinished = {
+                                // Save to preferences
+                                prefs.edit { putFloat("card_transparency", transparencyValue.value) }
+                                // Update global state
+                                (LocalContext.current as? MainActivity)?.setCardTransparency(transparencyValue.value)
+                            },
+                            valueRange = 0.5f..1.0f,
+                            steps = 9,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = stringResource(R.string.transparent),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    // Preview card with current transparency
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(4.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxSize(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = transparencyValue.value)
+                            )
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.preview),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            var enableAmoled by rememberSaveable {
-                mutableStateOf(
-                    prefs.getBoolean("enable_amoled", false)
-                )
-            }
-            if (isSystemInDarkTheme()) {
-                val activity = LocalContext.current as? MainActivity
-                SwitchItem(
-                    icon = Icons.Filled.Contrast,
-                    title = stringResource(id = R.string.settings_amoled_mode),
-                    summary = stringResource(id = R.string.settings_amoled_mode_summary),
-                    checked = enableAmoled
-                ) { checked ->
-                    activity?.setAmoledMode(checked)
-                    enableAmoled = checked
+            // Card 2: Custom Wallpaper
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Wallpaper,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.custom_wallpaper),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.custom_wallpaper_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Wallpaper preview
+                    val wallpaperBitmap = remember(wallpaperUri) {
+                        wallpaperUri?.let { uri ->
+                            try {
+                                val bitmap = LocalContext.current.contentResolver.openInputStream(uri)?.use {
+                                    android.graphics.BitmapFactory.decodeStream(it)
+                                }
+                                bitmap?.asImageBitmap()
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                    }
+
+                    if (wallpaperBitmap != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            Image(
+                                bitmap = wallpaperBitmap,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    // Wallpaper controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Image,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.choose_image))
+                        }
+
+                        if (wallpaperUri != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    kotlinx.coroutines.MainScope().launch {
+                                        val result = clearWallpaperDialog.awaitConfirm(
+                                            title = clearWallpaperTitle,
+                                            content = clearWallpaperContent,
+                                            confirm = clearConfirmText,
+                                            dismiss = cancelText
+                                        )
+                                        if (result == ConfirmResult.Confirmed) {
+                                            prefs.edit { remove("wallpaper_uri") }
+                                            (LocalContext.current as? MainActivity)?.clearWallpaper()
+                                            snackBarHost.showSnackbar(snackbarMessage)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.clear))
+                            }
+                        }
+                    }
+
+                    // Try to set system wallpaper with SU
+                    if (Natives.isManager) {
+                        OutlinedButton(
+                            onClick = {
+                                val shellResult = ShellUtils.fastCmd("su -c 'settings put wallpaper_set 1'")
+                                // Try to get current wallpaper
+                                val wallpaperCmd = ShellUtils.fastCmd("su -c 'content query --uri content://media/external/images/media --projection _id,_data --sort _id DESC --limit 1'")
+                                snackBarHost.showSnackbar("Wallpaper shell: $wallpaperCmd")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.SystemUpdate,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.set_system_wallpaper))
+                        }
+                    }
                 }
             }
+
+            // ============ 个性化设置 Section ============
+            Text(
+                text = stringResource(R.string.personalization),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Language setting
+                    val context = LocalContext.current
+                    var currentAppLocale by remember { mutableStateOf(LocaleHelper.getCurrentAppLocale(context)) }
+                    
+                    LaunchedEffect(Unit) {
+                        currentAppLocale = LocaleHelper.getCurrentAppLocale(context)
+                    }
+
+                    // Language dialog
+                    val languageDialog = rememberCustomDialog { dismiss ->
+                        if (LocaleHelper.useSystemLanguageSettings) {
+                            LocaleHelper.launchSystemLanguageSettings(context)
+                            dismiss()
+                        } else {
+                            val supportedLocales = remember {
+                                val locales = mutableListOf(java.util.Locale.ROOT)
+                                listOf("ar", "bg", "de", "fa", "fr", "hu", "in", "it", 
+                                    "ja", "ko", "pl", "pt-rBR", "ru", "th", "tr", 
+                                    "uk", "vi", "zh-rCN", "zh-rTW").forEach { dir ->
+                                    try {
+                                        val locale = if (dir.contains("-r")) {
+                                            val parts = dir.split("-r")
+                                            java.util.Locale(parts[0], parts[1])
+                                        } else {
+                                            java.util.Locale(dir)
+                                        }
+                                        locales.add(locale)
+                                    } catch (_: Exception) { }
+                                }
+                                locales
+                            }
+                            
+                            val allOptions = supportedLocales.map { locale ->
+                                val tag = if (locale == java.util.Locale.ROOT) "system" 
+                                    else if (locale.country.isEmpty()) locale.language
+                                    else "${locale.language}_${locale.country}"
+                                val displayName = if (locale == java.util.Locale.ROOT) 
+                                    context.getString(R.string.system_default) else locale.getDisplayName(locale)
+                                tag to displayName
+                            }
+                            
+                            val currentLocale = prefs.getString("app_locale", "system") ?: "system"
+                            val options = allOptions.map { (tag, displayName) ->
+                                ListOption(titleText = displayName, selected = currentLocale == tag)
+                            }
+                            
+                            var selectedIndex by remember { 
+                                mutableIntStateOf(allOptions.indexOfFirst { it.first == currentLocale }) 
+                            }
+                            
+                            ListDialog(
+                                state = rememberUseCaseState(
+                                    visible = true,
+                                    onFinishedRequest = {
+                                        if (selectedIndex >= 0) {
+                                            prefs.edit { putString("app_locale", allOptions[selectedIndex].first) }
+                                            refreshActivity(context)
+                                        }
+                                        dismiss()
+                                    },
+                                    onCloseRequest = { dismiss() }
+                                ),
+                                header = Header.Default(title = stringResource(R.string.settings_language)),
+                                selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ ->
+                                    selectedIndex = index
+                                }
+                            )
+                        }
+                    }
+
+                    val currentLanguageDisplay = remember(currentAppLocale) {
+                        currentAppLocale?.getDisplayName(currentAppLocale) 
+                            ?: context.getString(R.string.system_default)
+                    }
+
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { languageDialog.show() },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = { Icon(Icons.Filled.Translate, null) },
+                        headlineContent = {
+                            Text(text = stringResource(R.string.settings_language), fontWeight = FontWeight.SemiBold)
+                        },
+                        supportingContent = { Text(currentLanguageDisplay) }
+                    )
+
+                    // Theme style selection
+                    val themeStyles = listOf(
+                        "wild" to stringResource(R.string.theme_style_wild),
+                        "md3" to stringResource(R.string.theme_style_md3),
+                        "miui_x" to stringResource(R.string.theme_style_miui_x)
+                    )
+                    val currentThemeStyle = prefs.getString("theme_style", "wild") ?: "wild"
+                    val currentThemeDisplay = themeStyles.firstOrNull { it.first == currentThemeStyle }?.second
+                        ?: themeStyles[0].second
+
+                    val themeStyleDialog = rememberCustomDialog { dismiss ->
+                        val options = themeStyles.map { (_, displayName) ->
+                            ListOption(titleText = displayName, selected = currentThemeStyle == themeStyles.first { it.second == displayName }.first)
+                        }
+                        var selectedIndex by remember { mutableIntStateOf(themeStyles.indexOfFirst { it.first == currentThemeStyle }.coerceAtLeast(0)) }
+
+                        ListDialog(
+                            state = rememberUseCaseState(
+                                visible = true,
+                                onFinishedRequest = {
+                                    if (selectedIndex >= 0) {
+                                        prefs.edit { putString("theme_style", themeStyles[selectedIndex].first) }
+                                        refreshActivity(context)
+                                    }
+                                    dismiss()
+                                },
+                                onCloseRequest = { dismiss() }
+                            ),
+                            header = Header.Default(title = stringResource(R.string.theme_style_title)),
+                            selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ ->
+                                selectedIndex = index
+                            }
+                        )
+                    }
+
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { themeStyleDialog.show() },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = { Icon(Icons.Filled.Palette, null) },
+                        headlineContent = {
+                            Text(text = stringResource(R.string.theme_style_title), fontWeight = FontWeight.SemiBold)
+                        },
+                        supportingContent = { Text(currentThemeDisplay) }
+                    )
+
+                    var useBanner by rememberSaveable { mutableStateOf(prefs.getBoolean("use_banner", true)) }
+                    if (ksuVersion != null) {
+                        SwitchItem(
+                            icon = Icons.Filled.ViewCarousel,
+                            title = stringResource(R.string.settings_banner),
+                            summary = stringResource(R.string.settings_banner_summary),
+                            checked = useBanner,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        ) {
+                            prefs.edit { putBoolean("use_banner", it) }
+                            useBanner = it
+                        }
+                    }
+
+                    var enableAmoled by rememberSaveable { mutableStateOf(prefs.getBoolean("enable_amoled", false)) }
+                    if (isSystemInDarkTheme()) {
+                        val activity = LocalContext.current as? MainActivity
+                        SwitchItem(
+                            icon = Icons.Filled.Contrast,
+                            title = stringResource(R.string.settings_amoled_mode),
+                            summary = stringResource(R.string.settings_amoled_mode_summary),
+                            checked = enableAmoled,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        ) { checked ->
+                            activity?.setAmoledMode(checked)
+                            prefs.edit { putBoolean("enable_amoled", checked) }
+                            enableAmoled = checked
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(80.dp)) // Bottom padding for nav bar
         }
     }
 }
@@ -384,9 +582,7 @@ private fun TopBar(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
             ) }, navigationIcon = {
-            IconButton(
-                onClick = onBack
-            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
         },
         windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         scrollBehavior = scrollBehavior

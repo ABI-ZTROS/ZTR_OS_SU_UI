@@ -73,6 +73,12 @@ data class ScrollState(
 
 val LocalScrollState = compositionLocalOf<ScrollState?> { null }
 
+// ZTR_OS SU: Card transparency setting
+val LocalCardTransparency = compositionLocalOf<Float> { 0.95f }
+
+// ZTR_OS SU: Custom wallpaper URI
+val LocalWallpaperUri = compositionLocalOf<Uri?> { null }
+
 @Composable
 fun rememberScrollConnection(
     isScrollingDown: MutableState<Boolean>,
@@ -154,6 +160,11 @@ class MainActivity : ComponentActivity() {
     var moduleActionId by mutableStateOf<String?>(null)
     var amoledModeState = mutableStateOf(false)
     private val handler = Handler(Looper.getMainLooper())
+    
+    // ZTR_OS SU: Card transparency state
+    private val cardTransparencyState = mutableStateOf(0.95f)
+    // ZTR_OS SU: Wallpaper URI state
+    private val wallpaperUriState = mutableStateOf<Uri?>(null)
 
     val moduleViewModel: ModuleViewModel by viewModels()
     val superUserViewModel: SuperUserViewModel by viewModels()
@@ -183,6 +194,10 @@ class MainActivity : ComponentActivity() {
         try {
             val prefsInit = getSharedPreferences("settings", MODE_PRIVATE)
             amoledModeState.value = prefsInit.getBoolean("enable_amoled", false)
+            // ZTR_OS SU: Load transparency and wallpaper from prefs
+            cardTransparencyState.value = prefsInit.getFloat("card_transparency", 0.95f)
+            val wallpaperUriString = prefsInit.getString("wallpaper_uri", null)
+            wallpaperUriState.value = wallpaperUriString?.let { Uri.parse(it) }
         } catch (_: Exception) {}
 
         val isManager = Natives.isManager
@@ -283,7 +298,10 @@ class MainActivity : ComponentActivity() {
                                 isScrollingDown = isScrollingDown,
                                 scrollOffset = scrollOffset,
                                 previousScrollOffset = previousScrollOffset
-                            )
+                            ),
+                            // ZTR_OS SU: Provide card transparency and wallpaper settings
+                            LocalCardTransparency provides cardTransparencyState.value,
+                            LocalWallpaperUri provides wallpaperUriState.value
                         ) {
                             DestinationsNavHost(
                                 modifier = Modifier
@@ -402,6 +420,21 @@ class MainActivity : ComponentActivity() {
             prefs.edit().putBoolean("enable_amoled", enabled).apply()
         } catch (_: Exception) {}
         amoledModeState.value = enabled
+    }
+    
+    // ZTR_OS SU: Set card transparency
+    fun setCardTransparency(alpha: Float) {
+        cardTransparencyState.value = alpha
+    }
+    
+    // ZTR_OS SU: Set wallpaper URI
+    fun setWallpaperUri(uri: Uri) {
+        wallpaperUriState.value = uri
+    }
+    
+    // ZTR_OS SU: Clear wallpaper
+    fun clearWallpaper() {
+        wallpaperUriState.value = null
     }
 
     override fun onNewIntent(intent: Intent) {
