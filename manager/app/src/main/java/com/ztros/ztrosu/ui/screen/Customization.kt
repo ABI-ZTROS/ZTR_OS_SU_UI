@@ -54,6 +54,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
 import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.R
+import kotlinx.coroutines.launch
 
 /**
  * ZTR_OS SU UI-Only Mode - Enhanced Customization Screen
@@ -64,20 +65,29 @@ import com.ztros.ztrosu.R
 fun CustomizationScreen(navigator: DestinationsNavigator) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     val snackBarHost = LocalSnackbarHost.current
+    val coroutineScope = rememberCoroutineScope()
     val isManager = Natives.isManager
     val ksuVersion = if (isManager) Natives.version else null
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     
     // Card transparency state
-    val transparencyValue = rememberSaveable { mutableFloatStateOf(prefs.getFloat("card_transparency", 0.95f)) }
+    var transparencyValue by rememberSaveable { mutableFloatStateOf(0.95f) }
+    LaunchedEffect(Unit) {
+        transparencyValue = prefs.getFloat("card_transparency", 0.95f)
+    }
     
     // Wallpaper state
-    val wallpaperUriString = rememberSaveable { prefs.getString("wallpaper_uri", null) }
-    val wallpaperUri = remember(wallpaperUriString) { wallpaperUriString?.let { Uri.parse(it) } }
+    var wallpaperUri by remember { mutableStateOf<Uri?>(null) }
     var wallpaperBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     
-    // Load wallpaper bitmap
+    LaunchedEffect(Unit) {
+        val uriString = prefs.getString("wallpaper_uri", null)
+        if (uriString != null) {
+            wallpaperUri = Uri.parse(uriString)
+        }
+    }
+    
     LaunchedEffect(wallpaperUri) {
         wallpaperUri?.let { uri ->
             try {
@@ -94,17 +104,13 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
     ) { uri: Uri? ->
         uri?.let {
             prefs.edit { putString("wallpaper_uri", it.toString()) }
+            wallpaperUri = it
             (context as? MainActivity)?.setWallpaperUri(it)
         }
     }
 
     // Clear wallpaper dialog
     val clearDialog = rememberConfirmDialog()
-    val clearConfirmText = stringResource(R.string.confirm)
-    val cancelText = stringResource(R.string.cancel)
-    val clearTitle = stringResource(R.string.clear_wallpaper_title)
-    val clearContent = stringResource(R.string.clear_wallpaper_content)
-    val clearedMsg = stringResource(R.string.wallpaper_cleared)
 
     val bottomBarScrollState = LocalScrollState.current
     val bottomBarScrollConnection = if (bottomBarScrollState != null) {
@@ -141,6 +147,9 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
     val amoledModeText = stringResource(R.string.settings_amoled_mode)
     val amoledModeSummaryText = stringResource(R.string.settings_amoled_mode_summary)
     val customizationTitleText = stringResource(R.string.customization)
+    val clearTitle = stringResource(R.string.clear_wallpaper_title)
+    val clearContent = stringResource(R.string.clear_wallpaper_content)
+    val clearedMsg = stringResource(R.string.wallpaper_cleared)
 
     Scaffold(
         topBar = {
@@ -187,11 +196,11 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(opaqueText, style = MaterialTheme.typography.bodySmall)
                         Slider(
-                            value = transparencyValue.value,
-                            onValueChange = { transparencyValue.value = it },
+                            value = transparencyValue,
+                            onValueChange = { transparencyValue = it },
                             onValueChangeFinished = {
-                                prefs.edit { putFloat("card_transparency", transparencyValue.value) }
-                                (context as? MainActivity)?.setCardTransparency(transparencyValue.value)
+                                prefs.edit { putFloat("card_transparency", transparencyValue) }
+                                (context as? MainActivity)?.setCardTransparency(transparencyValue)
                             },
                             valueRange = 0.5f..1.0f,
                             steps = 9,
@@ -211,7 +220,7 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                     ) {
                         Card(
                             modifier = Modifier.fillMaxSize(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = transparencyValue.value))
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = transparencyValue))
                         ) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(previewText, style = MaterialTheme.typography.bodySmall)
@@ -259,10 +268,17 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                         if (wallpaperUri != null) {
                             OutlinedButton(
                                 onClick = {
-                                    kotlinx.coroutines.MainScope().launch {
-                                        val result = clearDialog.awaitConfirm(title = clearTitle, content = clearContent, confirm = clearConfirmText, dismiss = cancelText)
+                                    coroutineScope.launch {
+                                        val result = clearDialog.awaitConfirm(
+                                            title = clearTitle,
+                                            content = clearContent,
+                                            confirm = stringResource(R.string.confirm),
+                                            dismiss = stringResource(R.string.cancel)
+                                        )
                                         if (result == ConfirmResult.Confirmed) {
                                             prefs.edit { remove("wallpaper_uri") }
+                                            wallpaperUri = null
+                                            wallpaperBitmap = null
                                             (context as? MainActivity)?.clearCustomWallpaper()
                                             snackBarHost.showSnackbar(clearedMsg)
                                         }
@@ -281,8 +297,10 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                     if (Natives.isManager) {
                         OutlinedButton(
                             onClick = {
-                                val result = ShellUtils.fastCmd("su -c 'echo ZTR_OS_SU_TEST'")
-                                snackBarHost.showSnackbar("SU Test: $result")
+                                coroutineScope.launch {
+                                    val result = ShellUtils.fastCmd("su -c 'echo ZTR_OS_SU_TEST'")
+                                    snackBarHost.showSnackbar("SU Test: $result")
+                                }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
