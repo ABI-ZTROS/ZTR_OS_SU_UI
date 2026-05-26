@@ -5,8 +5,7 @@ import android.os.Build
 import android.system.Os
 import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.ui.screen.getManagerVersion
-import com.topjohnwu.superuser.Shell
-import com.topjohnwu.superuser.ShellUtils
+import com.ztros.ztrosu.ui.util.ShellUtils
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -65,7 +64,7 @@ fun getBugreportFile(context: Context): File {
     shell.newJob().add("cp /proc/bootconfig ${bootConfig.absolutePath}").exec()
     shell.newJob().add("cp /proc/config.gz ${kernelConfig.absolutePath}").exec()
 
-    val selinux = ShellUtils.fastCmd("getenforce")
+    val selinux = shell.newJob().add("getenforce").exec().out.joinToString("").trim()
 
     // basic information
     val buildInfo = File(bugreportDir, "basic.txt")

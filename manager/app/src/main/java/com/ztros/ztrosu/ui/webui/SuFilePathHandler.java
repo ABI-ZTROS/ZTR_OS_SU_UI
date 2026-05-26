@@ -7,9 +7,6 @@ import android.webkit.WebResourceResponse;
 import androidx.annotation.NonNull;
 import androidx.annotation.WorkerThread;
 import androidx.webkit.WebViewAssetLoader;
-import com.topjohnwu.superuser.Shell;
-import com.topjohnwu.superuser.io.SuFile;
-import com.topjohnwu.superuser.io.SuFileInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -58,7 +55,6 @@ public final class SuFilePathHandler implements WebViewAssetLoader.PathHandler {
     @NonNull
     private final File mDirectory;
 
-    private final Shell mShell;
     private final Context mContext;
     private final InsetsSupplier mInsetsSupplier;
     private final OnInsetsRequestedListener mOnInsetsRequestedListener;
@@ -98,7 +94,7 @@ public final class SuFilePathHandler implements WebViewAssetLoader.PathHandler {
      * @throws IllegalArgumentException if the directory is not allowed.
      */
 
-    public SuFilePathHandler(@NonNull Context context, @NonNull File directory, Shell rootShell, @NonNull InsetsSupplier insetsSupplier, OnInsetsRequestedListener onInsetsRequestedListener) {
+    public SuFilePathHandler(@NonNull Context context, @NonNull File directory, @NonNull InsetsSupplier insetsSupplier, OnInsetsRequestedListener onInsetsRequestedListener) {
         try {
             mContext = context;
             mInsetsSupplier = insetsSupplier;
@@ -108,7 +104,6 @@ public final class SuFilePathHandler implements WebViewAssetLoader.PathHandler {
                 throw new IllegalArgumentException("The given directory \"" + directory
                         + "\" doesn't exist under an allowed app internal storage directory");
             }
-            mShell = rootShell;
         } catch (IOException e) {
             throw new IllegalArgumentException(
                     "Failed to resolve the canonical path for the given directory: "
@@ -174,7 +169,7 @@ public final class SuFilePathHandler implements WebViewAssetLoader.PathHandler {
         try {
             File file = getCanonicalFileIfChild(mDirectory, path);
             if (file != null) {
-                InputStream is = openFile(file, mShell);
+                InputStream is = openFile(file);
                 String mimeType = guessMimeType(path);
                 return new WebResourceResponse(mimeType, null, is);
             } else {
@@ -210,10 +205,8 @@ public final class SuFilePathHandler implements WebViewAssetLoader.PathHandler {
         return path.endsWith(".svgz") ? new GZIPInputStream(stream) : stream;
     }
 
-    public static InputStream openFile(@NonNull File file, @NonNull Shell shell) throws IOException {
-        SuFile suFile = new SuFile(file.getAbsolutePath());
-        suFile.setShell(shell);
-        InputStream fis = SuFileInputStream.open(suFile);
+    public static InputStream openFile(@NonNull File file) throws IOException {
+        InputStream fis = new java.io.FileInputStream(file);
         return handleSvgzStream(file.getPath(), fis);
     }
 

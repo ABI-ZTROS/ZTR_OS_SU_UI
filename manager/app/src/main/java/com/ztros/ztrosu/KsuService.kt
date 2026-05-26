@@ -1,5 +1,6 @@
 package com.ztros.ztrosu.ui;
 
+import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -7,7 +8,6 @@ import android.os.IBinder
 import android.os.UserHandle
 import android.os.UserManager
 import android.util.Log
-import com.topjohnwu.superuser.ipc.RootService
 import com.ztros.ztrosu.IKsuInterface
 import rikka.parcelablelist.ParcelableListSlice
 
@@ -16,7 +16,7 @@ import rikka.parcelablelist.ParcelableListSlice
  * @date 2023/4/18.
  */
 
-class KsuService : RootService() {
+class KsuService : Service() {
 
     companion object {
         private const val TAG = "KsuService"

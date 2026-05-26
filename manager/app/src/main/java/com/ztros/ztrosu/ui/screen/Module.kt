@@ -83,7 +83,7 @@ import com.ztros.ztrosu.ui.util.module.Shortcut
 import com.ztros.ztrosu.ui.util.*
 import com.ztros.ztrosu.ui.viewmodel.ModuleViewModel
 import com.ztros.ztrosu.ui.webui.WebUIActivity
-import com.topjohnwu.superuser.io.SuFile
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

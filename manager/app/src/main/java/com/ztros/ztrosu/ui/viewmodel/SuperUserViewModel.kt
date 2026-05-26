@@ -22,8 +22,6 @@ import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.ksuApp
 import com.ztros.ztrosu.ui.KsuService
 import com.ztros.ztrosu.ui.util.HanziToPinyin
-import com.topjohnwu.superuser.ipc.RootService
-import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
@@ -138,18 +136,11 @@ class SuperUserViewModel : ViewModel() {
         }
 
         val intent = Intent(ksuApp, KsuService::class.java)
-
-        val task = RootService.bindOrTask(
-            intent,
-            Shell.EXECUTOR,
-            connection,
-        )
-        task?.let { it1 -> Shell.getShell().execTask(it1) }
+        ksuApp.bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
 
     private fun stopKsuService() {
-        val intent = Intent(ksuApp, KsuService::class.java)
-        RootService.stop(intent)
+        // Service will be stopped after use
     }
 
     suspend fun fetchAppList() {

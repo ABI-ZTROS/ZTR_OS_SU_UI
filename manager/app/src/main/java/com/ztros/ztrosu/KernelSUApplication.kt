@@ -11,7 +11,6 @@ import coil.ImageLoader
 import com.ztros.ztrosu.ui.util.createRootShellBuilder
 import com.ztros.ztrosu.ui.viewmodel.ModuleViewModel
 import com.ztros.ztrosu.ui.viewmodel.SuperUserViewModel
-import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,8 +31,6 @@ class KernelSUApplication : Application(), ViewModelStoreOwner {
     override fun onCreate() {
         super.onCreate()
         ksuApp = this
-        Shell.setDefaultBuilder(createRootShellBuilder(true))
-        Shell.enableVerboseLogging = BuildConfig.DEBUG
 
         val context = this
         val iconSize = resources.getDimensionPixelSize(android.R.dimen.app_icon_size)

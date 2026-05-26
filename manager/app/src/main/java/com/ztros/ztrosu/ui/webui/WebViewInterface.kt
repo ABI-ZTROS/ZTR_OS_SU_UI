@@ -24,13 +24,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.ztros.ztrosu.ui.util.createRootShell
 import com.ztros.ztrosu.ui.util.listModules
 import com.ztros.ztrosu.ui.util.withNewRootShell
+import com.ztros.ztrosu.ui.util.ShellUtils
 import com.ztros.ztrosu.ui.viewmodel.SuperUserViewModel
-import com.topjohnwu.superuser.CallbackList
-import com.topjohnwu.superuser.ShellUtils
-import com.topjohnwu.superuser.internal.UiThreadHandler
-import com.topjohnwu.superuser.io.SuFile
-import com.topjohnwu.superuser.io.SuFileInputStream
-import com.topjohnwu.superuser.io.SuFileOutputStream
 import com.ztros.ztrosu.ui.util.module.Shortcut
 import org.json.JSONArray
 import org.json.JSONObject
@@ -136,46 +131,35 @@ class WebViewInterface(
             }
         }
 
-        val stdout = object : CallbackList<String>(UiThreadHandler::runAndWait) {
-            override fun onAddElement(s: String) {
-                emitData("stdout", s)
-            }
+        val stdoutList = ArrayList<String>()
+        val stderrList = ArrayList<String>()
+
+        val result = shell.newJob().add(finalCommand.toString()).to(stdoutList, stderrList).exec()
+        
+        stdoutList.forEach { emitData("stdout", it) }
+        stderrList.forEach { emitData("stderr", it) }
+        
+        val emitExitCode =
+            "(function() { try { ${callbackFunc}.emit('exit', ${result.code}); } catch(e) { console.error(`emitExit error: \${e}`); } })();"
+        webView.post {
+            webView.evaluateJavascript(emitExitCode, null)
         }
 
-        val stderr = object : CallbackList<String>(UiThreadHandler::runAndWait) {
-            override fun onAddElement(s: String) {
-                emitData("stderr", s)
-            }
-        }
-
-        val future = shell.newJob().add(finalCommand.toString()).to(stdout, stderr).enqueue()
-        val completableFuture = CompletableFuture.supplyAsync {
-            future.get()
-        }
-
-        completableFuture.thenAccept { result ->
-            val emitExitCode =
-                "(function() { try { ${callbackFunc}.emit('exit', ${result.code}); } catch(e) { console.error(`emitExit error: \${e}`); } })();"
-            webView.post {
-                webView.evaluateJavascript(emitExitCode, null)
-            }
-
-            if (result.code != 0) {
-                val emitErrCode =
-                    "(function() { try { var err = new Error(); err.exitCode = ${result.code}; err.message = ${
-                        JSONObject.quote(
-                            result.err.joinToString(
-                                "\n"
-                            )
+        if (result.code != 0) {
+            val emitErrCode =
+                "(function() { try { var err = new Error(); err.exitCode = ${result.code}; err.message = ${
+                    JSONObject.quote(
+                        result.err.joinToString(
+                            "\n"
                         )
-                    };${callbackFunc}.emit('error', err); } catch(e) { console.error('emitErr', e); } })();"
-                webView.post {
-                    webView.evaluateJavascript(emitErrCode, null)
-                }
+                    )
+                };${callbackFunc}.emit('error', err); } catch(e) { console.error('emitErr', e); } })();"
+            webView.post {
+                webView.evaluateJavascript(emitErrCode, null)
             }
-        }.whenComplete { _, _ ->
-            runCatching { shell.close() }
         }
+        
+        runCatching { shell.close() }
     }
 
     @JavascriptInterface
@@ -241,15 +225,15 @@ class WebViewInterface(
 
                 try {
                     val candidate = "/data/adb/modules/$moduleId/$p"
-                    val f = SuFile(candidate)
-                    if (f.exists()) return "su://$candidate"
+                    val result = ShellUtils.fastCmd("test -f '$candidate' && echo 'exists' || echo 'notfound'")
+                    if (result.trim() == "exists") return "su://$candidate"
                 } catch (_: Exception) {
                 }
 
                 if (p.startsWith("/")) {
                     try {
-                        val f = SuFile(p)
-                        if (f.exists()) return "su://$p"
+                        val result = ShellUtils.fastCmd("test -f '$p' && echo 'exists' || echo 'notfound'")
+                        if (result.trim() == "exists") return "su://$p"
                     } catch (_: Exception) {
                     }
                     return "file://$p"
@@ -379,8 +363,8 @@ class WebViewInterface(
      @JavascriptInterface
     fun listFile(path: String): String {
         return try {
-            val suFile = SuFile(path)
-            val files = suFile.listFiles()?.map { it.name } ?: emptyList()
+            val result = ShellUtils.fastCmd("ls -1 '$path'")
+            val files = result.split("\n").filter { it.isNotBlank() }
             JSONArray(files).toString()
         } catch (e: Exception) {
             JSONArray().toString()
@@ -478,15 +462,27 @@ class FileOutputStreamInterface {
     @JavascriptInterface
     fun open(path: String, append: Boolean): String {
         return try {
-            val file = SuFile(path)
-            val fos = SuFileOutputStream.open(file, append)
+            // Use temp file approach for writing with root
+            val tempFile = java.io.File.createTempFile("webview_write", null)
+            val fos = java.io.FileOutputStream(tempFile, append)
             val bos = BufferedOutputStream(fos, 64 * 1024)
             val id = UUID.randomUUID().toString()
             openStreams[id] = bos
+            // Store target path for later copy
+            tempFileToTargetMap[id] = path to tempFile
             id
         } catch (e: Exception) {
             Log.e(TAG, "open failed", e)
             ""
+        }
+    }
+    
+    private val tempFileToTargetMap = ConcurrentHashMap<String, Pair<String, java.io.File>>()
+    
+    private fun finalizeWrite(id: String) {
+        tempFileToTargetMap.remove(id)?.let { (targetPath, tempFile) ->
+            ShellUtils.fastCmd("cat '${tempFile.absolutePath}' > '$targetPath'")
+            tempFile.delete()
         }
     }
 
@@ -537,6 +533,7 @@ class FileOutputStreamInterface {
         val bos = openStreams.remove(id) ?: return false
         return runCatching {
             synchronized(bos) { bos.close() }
+            finalizeWrite(id)
             true
         }.getOrElse {
             Log.e(TAG, "close failed", it)
@@ -551,8 +548,10 @@ class FileOutputStreamInterface {
             }.onFailure {
                 Log.e(TAG, "closeAll failed for $id", it)
             }
+            finalizeWrite(id)
         }
         openStreams.clear()
+        tempFileToTargetMap.clear()
     }
 }
 

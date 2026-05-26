@@ -16,11 +16,11 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
-import com.topjohnwu.superuser.io.SuFile
-import com.topjohnwu.superuser.io.SuFileInputStream
 import com.ztros.ztrosu.R
+import java.io.File
 import com.ztros.ztrosu.ui.MainActivity
 import com.ztros.ztrosu.ui.util.createRootShell
+import com.ztros.ztrosu.ui.util.ShellUtils
 import com.ztros.ztrosu.ui.webui.WebUIActivity
 
 object Shortcut {
@@ -178,9 +178,11 @@ object Shortcut {
             val raw = when {
                 uri.scheme.equals("su", ignoreCase = true) -> {
                     val path = uri.path?.takeIf { it.isNotBlank() } ?: return null
+                    // Use root shell to read file
                     val shell = createRootShell(true)
-                    val suFile = SuFile(path).also { it.shell = shell }
-                    SuFileInputStream.open(suFile).use { BitmapFactory.decodeStream(it) }
+                    val tempFile = File(context.cacheDir, "shortcut_icon_temp")
+                    ShellUtils.fastCmd("cp '$path' '${tempFile.absolutePath}'")
+                    tempFile.inputStream().use { BitmapFactory.decodeStream(it) }
                 }
                 else -> context.contentResolver.openInputStream(uri)
                     ?.use { BitmapFactory.decodeStream(it) }
