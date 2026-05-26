@@ -354,4 +354,7 @@
     <string name="about_card_title">About</string>
     <string name="about_card_package">Package</string>
     <string name="about_card_forked_from">Based on</string>
+    <string name="restore_modules_summary">Restore modules from recent backup.</string>
+    <string name="note">Note</string>
+    <string name="backup_restore_note">Backup and restore operations require root access. Make sure to backup before making significant changes.</string>
 </resources>

@@ -62,16 +62,15 @@ fun Context.findActivity(): Activity? = when (this) {
 }
 
 // Lets you flash modules sequentially when mutiple zipUris are selected
-fun flashModulesSequentially(
+suspend fun flashModulesSequentially(
     uris: List<Uri>,
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit
 ): FlashResult {
     for (uri in uris) {
-        flashModule(uri, onStdout, onStderr).apply {
-            if (code != 0) {
-                return FlashResult(code, err, showReboot)
-            }
+        val result = flashModule(uri, onStdout, onStderr)
+        if (result.code != 0) {
+            return FlashResult(result.code, result.err, result.showReboot)
         }
     }
     return FlashResult(0, "", true)

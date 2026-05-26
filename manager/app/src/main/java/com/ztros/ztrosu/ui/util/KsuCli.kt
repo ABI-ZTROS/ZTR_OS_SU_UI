@@ -597,3 +597,18 @@ fun install(uri: Uri, onFinish: (Boolean) -> Unit) {
     Log.i(TAG, "UI-Only: Installing module from URI $uri")
     installModule(uri, onFinish)
 }
+
+/**
+ * Run module action - UI-Only mode (simulated)
+ */
+suspend fun runModuleAction(
+    moduleId: String,
+    onStdout: (String) -> Unit,
+    onStderr: (String) -> Unit
+): Boolean = withContext(Dispatchers.IO) {
+    Log.i(TAG, "UI-Only: Running module action for $moduleId")
+    // Simulate some output
+    onStdout("Running action for module: $moduleId")
+    onStdout("Action completed successfully")
+    true
+}

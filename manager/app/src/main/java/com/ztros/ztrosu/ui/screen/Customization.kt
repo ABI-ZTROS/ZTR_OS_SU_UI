@@ -368,7 +368,7 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                                 state = rememberUseCaseState(visible = true, onFinishedRequest = {
                                     if (selectedIndex >= 0) {
                                         prefs.edit { putString("app_locale", allOptions[selectedIndex].first) }
-                                        refreshActivity(context)
+                                        (context as? android.app.Activity)?.let { refreshActivity(it) }
                                     }
                                     dismiss()
                                 }, onCloseRequest = { dismiss() }),
@@ -409,7 +409,7 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                             state = rememberUseCaseState(visible = true, onFinishedRequest = {
                                 if (selectedIndex >= 0) {
                                     prefs.edit { putString("theme_style", themeStyles[selectedIndex].first) }
-                                    refreshActivity(context)
+                                    (context as? android.app.Activity)?.let { refreshActivity(it) }
                                 }
                                 dismiss()
                             }, onCloseRequest = { dismiss() }),
