@@ -66,7 +66,7 @@ object Natives {
             groups = listOf(),
             capabilities = listOf(),
             context = KERNEL_SU_DOMAIN,
-            namespace = Namespace.INHERITED.ordinal,
+            namespace = Profile.Namespace.INHERITED.ordinal,
             nonRootUseDefault = true,
             umountModules = true,
             rules = ""
