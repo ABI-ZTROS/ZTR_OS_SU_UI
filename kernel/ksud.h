@@ -1,0 +1,36 @@
+#ifndef __KSU_H_KSUD
+#define __KSU_H_KSUD
+
+#include <linux/types.h>
+#include <asm/syscall.h>
+#include <linux/stat.h>
+
+struct filename;
+
+#define KSUD_PATH "/data/adb/ksud"
+
+void ksu_ksud_init();
+void ksu_ksud_exit();
+
+void on_post_fs_data(void);
+void on_boot_completed(void);
+
+bool ksu_is_safe_mode(void);
+void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
+#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
+void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);
+#endif
+
+int nuke_ext4_sysfs(const char *mnt);
+
+extern u32 ksu_file_sid;
+extern bool ksu_boot_completed;
+
+void ksu_execve_hook_ksud(const struct pt_regs *regs);
+void ksu_stop_ksud_execve_hook();
+int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+				     void *argv, void *envp, int *flags);
+int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
+			      void *argv, void *envp, int *flags);
+
+#endif
