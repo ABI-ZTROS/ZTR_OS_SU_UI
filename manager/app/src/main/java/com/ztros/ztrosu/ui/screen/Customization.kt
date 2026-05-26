@@ -1,9 +1,8 @@
 package com.ztros.ztrosu.ui.screen
 
 import android.content.Context
-import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -31,9 +30,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.ztros.ztrosu.ui.MainActivity
+import com.ztros.ztrosu.ui.LocalScrollState
+import com.ztros.ztrosu.ui.LocalCardTransparency
+import com.ztros.ztrosu.ui.LocalWallpaperUri
+import com.ztros.ztrosu.ui.component.SwitchItem
+import com.ztros.ztrosu.ui.component.rememberCustomDialog
+import com.ztros.ztrosu.ui.component.rememberConfirmDialog
+import com.ztros.ztrosu.ui.component.ConfirmResult
+import com.ztros.ztrosu.ui.util.refreshActivity
+import com.ztros.ztrosu.ui.util.LocalSnackbarHost
+import com.ztros.ztrosu.ui.util.LocaleHelper
+import com.ztros.ztrosu.ui.util.ShellUtils
 import com.maxkeppeker.sheets.core.models.base.Header
 import com.maxkeppeker.sheets.core.models.base.rememberUseCaseState
 import com.maxkeppeler.sheets.list.ListDialog
@@ -45,28 +54,58 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
 import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.R
-import com.ztros.ztrosu.ui.LocalWallpaperUri
-import com.ztros.ztrosu.ui.LocalCardTransparency
-import com.ztros.ztrosu.ui.component.SwitchItem
-import com.ztros.ztrosu.ui.component.rememberCustomDialog
-import com.ztros.ztrosu.ui.component.rememberConfirmDialog
-import com.ztros.ztrosu.ui.component.ConfirmResult
-import com.ztros.ztrosu.ui.util.refreshActivity
-import com.ztros.ztrosu.ui.util.LocalSnackbarHost
-import com.ztros.ztrosu.ui.util.LocaleHelper
-import com.ztros.ztrosu.ui.util.ShellUtils
 
 /**
- * @author twj
- * @date 2025/6/1.
- * ZTR_OS SU UI-Only Mode - Enhanced Customization
+ * ZTR_OS SU UI-Only Mode - Enhanced Customization Screen
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
 fun CustomizationScreen(navigator: DestinationsNavigator) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-    // Bottom bar scroll tracking
+    val snackBarHost = LocalSnackbarHost.current
+    val isManager = Natives.isManager
+    val ksuVersion = if (isManager) Natives.version else null
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    
+    // Card transparency state
+    val transparencyValue = rememberSaveable { mutableFloatStateOf(prefs.getFloat("card_transparency", 0.95f)) }
+    
+    // Wallpaper state
+    val wallpaperUriString = rememberSaveable { prefs.getString("wallpaper_uri", null) }
+    val wallpaperUri = remember(wallpaperUriString) { wallpaperUriString?.let { Uri.parse(it) } }
+    var wallpaperBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    
+    // Load wallpaper bitmap
+    LaunchedEffect(wallpaperUri) {
+        wallpaperUri?.let { uri ->
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    wallpaperBitmap = BitmapFactory.decodeStream(stream)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            prefs.edit { putString("wallpaper_uri", it.toString()) }
+            (context as? MainActivity)?.setWallpaperUri(it)
+        }
+    }
+
+    // Clear wallpaper dialog
+    val clearDialog = rememberConfirmDialog()
+    val clearConfirmText = stringResource(R.string.confirm)
+    val cancelText = stringResource(R.string.cancel)
+    val clearTitle = stringResource(R.string.clear_wallpaper_title)
+    val clearContent = stringResource(R.string.clear_wallpaper_content)
+    val clearedMsg = stringResource(R.string.wallpaper_cleared)
+
     val bottomBarScrollState = LocalScrollState.current
     val bottomBarScrollConnection = if (bottomBarScrollState != null) {
         com.ztros.ztrosu.ui.rememberScrollConnection(
@@ -76,67 +115,49 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
             threshold = 30f
         )
     } else null
-    val snackBarHost = LocalSnackbarHost.current
-
-    val isManager = Natives.isManager
-    val ksuVersion = if (isManager) Natives.version else null
 
     val scrollState = LocalScrollState.current
     val isNavBarHidden = scrollState?.isScrollingDown?.value ?: false
     val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + if (isNavBarHidden) 0.dp else 112.dp
 
-    // Card transparency state
-    val cardTransparency = LocalCardTransparency.current
-    val prefs = LocalContext.current.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    
-    // Wallpaper state
-    val wallpaperUri = LocalWallpaperUri.current
-
-    // Image picker for wallpaper
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            // Save wallpaper URI to preferences
-            prefs.edit { putString("wallpaper_uri", uri.toString()) }
-            // Update wallpaper state to trigger recomposition
-            (LocalContext.current as? MainActivity)?.setWallpaperUri(uri)
-        }
-    }
-
-    // Clear wallpaper confirmation dialog
-    val clearWallpaperDialog = rememberConfirmDialog()
-    val clearConfirmText = stringResource(R.string.confirm)
-    val cancelText = stringResource(R.string.cancel)
-    val clearWallpaperTitle = stringResource(R.string.clear_wallpaper_title)
-    val clearWallpaperContent = stringResource(R.string.clear_wallpaper_content)
-    val snackbarMessage = stringResource(R.string.wallpaper_cleared)
+    // Pre-resolve all string resources
+    val interfaceSettingsText = stringResource(R.string.interface_settings)
+    val personalizationText = stringResource(R.string.personalization)
+    val cardTransparencyText = stringResource(R.string.card_transparency)
+    val cardTransparencySummaryText = stringResource(R.string.card_transparency_summary)
+    val customWallpaperText = stringResource(R.string.custom_wallpaper)
+    val customWallpaperSummaryText = stringResource(R.string.custom_wallpaper_summary)
+    val opaqueText = stringResource(R.string.opaque)
+    val transparentText = stringResource(R.string.transparent)
+    val previewText = stringResource(R.string.preview)
+    val chooseImageText = stringResource(R.string.choose_image)
+    val clearText = stringResource(R.string.clear)
+    val setSystemWallpaperText = stringResource(R.string.set_system_wallpaper)
+    val languageText = stringResource(R.string.settings_language)
+    val systemDefaultText = stringResource(R.string.system_default)
+    val themeStyleTitleText = stringResource(R.string.theme_style_title)
+    val bannerText = stringResource(R.string.settings_banner)
+    val bannerSummaryText = stringResource(R.string.settings_banner_summary)
+    val amoledModeText = stringResource(R.string.settings_amoled_mode)
+    val amoledModeSummaryText = stringResource(R.string.settings_amoled_mode_summary)
+    val customizationTitleText = stringResource(R.string.customization)
 
     Scaffold(
         topBar = {
-            TopBar(
-                onBack = dropUnlessResumed {
-                    navigator.popBackStack()
-                },
-                scrollBehavior = scrollBehavior
+            TopAppBar(
+                title = { Text(customizationTitleText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black) },
+                navigationIcon = { IconButton(onClick = dropUnlessResumed { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                scrollBehavior = scrollBehavior,
+                windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
             )
         },
         snackbarHost = { SnackbarHost(snackBarHost, modifier = Modifier.padding(bottom = navBarPadding)) },
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
     ) { paddingValues ->
-    
         Column(
             modifier = Modifier
                 .padding(paddingValues)
-                .let { modifier ->
-                    if (bottomBarScrollConnection != null) {
-                        modifier
-                            .nestedScroll(bottomBarScrollConnection)
-                            .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    } else {
-                        modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
-                    }
-                }
+                .then(if (bottomBarScrollConnection != null) Modifier.nestedScroll(bottomBarScrollConnection).nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier.nestedScroll(scrollBehavior.nestedScrollConnection))
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -144,7 +165,7 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
 
             // ============ 界面设置 Section ============
             Text(
-                text = stringResource(R.string.interface_settings),
+                text = interfaceSettingsText,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -152,71 +173,34 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
             )
 
             // Card 1: UI Card Transparency
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.FilledOpacity,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.FormatColorFill, null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(
-                                text = stringResource(R.string.card_transparency),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = stringResource(R.string.card_transparency_summary),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(cardTransparencyText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(cardTransparencySummaryText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
-                    // Transparency slider
-                    val transparencyValue = rememberSaveable { 
-                        mutableFloatStateOf(prefs.getFloat("card_transparency", 0.95f))
-                    }
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = stringResource(R.string.opaque),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(opaqueText, style = MaterialTheme.typography.bodySmall)
                         Slider(
                             value = transparencyValue.value,
-                            onValueChange = { newValue ->
-                                transparencyValue.value = newValue
-                            },
+                            onValueChange = { transparencyValue.value = it },
                             onValueChangeFinished = {
-                                // Save to preferences
                                 prefs.edit { putFloat("card_transparency", transparencyValue.value) }
-                                // Update global state
-                                (LocalContext.current as? MainActivity)?.setCardTransparency(transparencyValue.value)
+                                (context as? MainActivity)?.setCardTransparency(transparencyValue.value)
                             },
                             valueRange = 0.5f..1.0f,
                             steps = 9,
                             modifier = Modifier.weight(1f)
                         )
-                        Text(
-                            text = stringResource(R.string.transparent),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text(transparentText, style = MaterialTheme.typography.bodySmall)
                     }
 
-                    // Preview card with current transparency
+                    // Preview
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -227,18 +211,10 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                     ) {
                         Card(
                             modifier = Modifier.fillMaxSize(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = transparencyValue.value)
-                            )
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = transparencyValue.value))
                         ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.preview),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(previewText, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -246,134 +222,74 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
             }
 
             // Card 2: Custom Wallpaper
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Wallpaper,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Wallpaper, null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(
-                                text = stringResource(R.string.custom_wallpaper),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = stringResource(R.string.custom_wallpaper_summary),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(customWallpaperText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(customWallpaperSummaryText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
                     // Wallpaper preview
-                    val wallpaperBitmap = remember(wallpaperUri) {
-                        wallpaperUri?.let { uri ->
-                            try {
-                                val bitmap = LocalContext.current.contentResolver.openInputStream(uri)?.use {
-                                    android.graphics.BitmapFactory.decodeStream(it)
-                                }
-                                bitmap?.asImageBitmap()
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                    }
-
-                    if (wallpaperBitmap != null) {
+                    wallpaperBitmap?.let { bmp ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(120.dp)
                                 .clip(RoundedCornerShape(8.dp))
                         ) {
-                            Image(
-                                bitmap = wallpaperBitmap,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Image(bitmap = bmp.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
                         }
                     }
 
-                    // Wallpaper controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    // Buttons
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { imagePickerLauncher.launch("image/*") },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Image,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(Icons.Filled.Image, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.choose_image))
+                            Text(chooseImageText)
                         }
 
                         if (wallpaperUri != null) {
                             OutlinedButton(
                                 onClick = {
                                     kotlinx.coroutines.MainScope().launch {
-                                        val result = clearWallpaperDialog.awaitConfirm(
-                                            title = clearWallpaperTitle,
-                                            content = clearWallpaperContent,
-                                            confirm = clearConfirmText,
-                                            dismiss = cancelText
-                                        )
+                                        val result = clearDialog.awaitConfirm(title = clearTitle, content = clearContent, confirm = clearConfirmText, dismiss = cancelText)
                                         if (result == ConfirmResult.Confirmed) {
                                             prefs.edit { remove("wallpaper_uri") }
-                                            (LocalContext.current as? MainActivity)?.clearWallpaper()
-                                            snackBarHost.showSnackbar(snackbarMessage)
+                                            (context as? MainActivity)?.clearCustomWallpaper()
+                                            snackBarHost.showSnackbar(clearedMsg)
                                         }
                                     }
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Clear,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Icon(Icons.Filled.Clear, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text(stringResource(R.string.clear))
+                                Text(clearText)
                             }
                         }
                     }
 
-                    // Try to set system wallpaper with SU
+                    // SU wallpaper button
                     if (Natives.isManager) {
                         OutlinedButton(
                             onClick = {
-                                val shellResult = ShellUtils.fastCmd("su -c 'settings put wallpaper_set 1'")
-                                // Try to get current wallpaper
-                                val wallpaperCmd = ShellUtils.fastCmd("su -c 'content query --uri content://media/external/images/media --projection _id,_data --sort _id DESC --limit 1'")
-                                snackBarHost.showSnackbar("Wallpaper shell: $wallpaperCmd")
+                                val result = ShellUtils.fastCmd("su -c 'echo ZTR_OS_SU_TEST'")
+                                snackBarHost.showSnackbar("SU Test: $result")
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary
-                            )
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.SystemUpdate,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(Icons.Filled.SystemUpdate, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.set_system_wallpaper))
+                            Text(setSystemWallpaperText)
                         }
                     }
                 }
@@ -381,29 +297,20 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
 
             // ============ 个性化设置 Section ============
             Text(
-                text = stringResource(R.string.personalization),
+                text = personalizationText,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // Language setting
-                    val context = LocalContext.current
-                    var currentAppLocale by remember { mutableStateOf(LocaleHelper.getCurrentAppLocale(context)) }
-                    
-                    LaunchedEffect(Unit) {
-                        currentAppLocale = LocaleHelper.getCurrentAppLocale(context)
-                    }
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
 
-                    // Language dialog
+                    // Language setting
+                    var currentAppLocale by remember { mutableStateOf(LocaleHelper.getCurrentAppLocale(context)) }
+                    LaunchedEffect(Unit) { currentAppLocale = LocaleHelper.getCurrentAppLocale(context) }
+
                     val languageDialog = rememberCustomDialog { dismiss ->
                         if (LocaleHelper.useSystemLanguageSettings) {
                             LocaleHelper.launchSystemLanguageSettings(context)
@@ -411,28 +318,21 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                         } else {
                             val supportedLocales = remember {
                                 val locales = mutableListOf(java.util.Locale.ROOT)
-                                listOf("ar", "bg", "de", "fa", "fr", "hu", "in", "it", 
-                                    "ja", "ko", "pl", "pt-rBR", "ru", "th", "tr", 
-                                    "uk", "vi", "zh-rCN", "zh-rTW").forEach { dir ->
+                                listOf("ar", "bg", "de", "fa", "fr", "hu", "in", "it", "ja", "ko", "pl", "pt-rBR", "ru", "th", "tr", "uk", "vi", "zh-rCN", "zh-rTW").forEach { dir ->
                                     try {
                                         val locale = if (dir.contains("-r")) {
                                             val parts = dir.split("-r")
                                             java.util.Locale(parts[0], parts[1])
-                                        } else {
-                                            java.util.Locale(dir)
-                                        }
+                                        } else java.util.Locale(dir)
                                         locales.add(locale)
-                                    } catch (_: Exception) { }
+                                    } catch (_: Exception) {}
                                 }
                                 locales
                             }
                             
                             val allOptions = supportedLocales.map { locale ->
-                                val tag = if (locale == java.util.Locale.ROOT) "system" 
-                                    else if (locale.country.isEmpty()) locale.language
-                                    else "${locale.language}_${locale.country}"
-                                val displayName = if (locale == java.util.Locale.ROOT) 
-                                    context.getString(R.string.system_default) else locale.getDisplayName(locale)
+                                val tag = if (locale == java.util.Locale.ROOT) "system" else if (locale.country.isEmpty()) locale.language else "${locale.language}_${locale.country}"
+                                val displayName = if (locale == java.util.Locale.ROOT) systemDefaultText else locale.getDisplayName(locale)
                                 tag to displayName
                             }
                             
@@ -441,102 +341,77 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                                 ListOption(titleText = displayName, selected = currentLocale == tag)
                             }
                             
-                            var selectedIndex by remember { 
-                                mutableIntStateOf(allOptions.indexOfFirst { it.first == currentLocale }) 
-                            }
-                            
+                            var selectedIndex by remember { mutableIntStateOf(allOptions.indexOfFirst { it.first == currentLocale }) }
+
                             ListDialog(
-                                state = rememberUseCaseState(
-                                    visible = true,
-                                    onFinishedRequest = {
-                                        if (selectedIndex >= 0) {
-                                            prefs.edit { putString("app_locale", allOptions[selectedIndex].first) }
-                                            refreshActivity(context)
-                                        }
-                                        dismiss()
-                                    },
-                                    onCloseRequest = { dismiss() }
-                                ),
-                                header = Header.Default(title = stringResource(R.string.settings_language)),
-                                selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ ->
-                                    selectedIndex = index
-                                }
+                                state = rememberUseCaseState(visible = true, onFinishedRequest = {
+                                    if (selectedIndex >= 0) {
+                                        prefs.edit { putString("app_locale", allOptions[selectedIndex].first) }
+                                        refreshActivity(context)
+                                    }
+                                    dismiss()
+                                }, onCloseRequest = { dismiss() }),
+                                header = Header.Default(title = languageText),
+                                selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ -> selectedIndex = index }
                             )
                         }
                     }
 
-                    val currentLanguageDisplay = remember(currentAppLocale) {
-                        currentAppLocale?.getDisplayName(currentAppLocale) 
-                            ?: context.getString(R.string.system_default)
+                    val languageDisplay = remember(currentAppLocale) {
+                        currentAppLocale?.getDisplayName(currentAppLocale) ?: systemDefaultText
                     }
 
                     ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { languageDialog.show() },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { languageDialog.show() },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         leadingContent = { Icon(Icons.Filled.Translate, null) },
-                        headlineContent = {
-                            Text(text = stringResource(R.string.settings_language), fontWeight = FontWeight.SemiBold)
-                        },
-                        supportingContent = { Text(currentLanguageDisplay) }
+                        headlineContent = { Text(languageText, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text(languageDisplay) }
                     )
 
-                    // Theme style selection
+                    // Theme style
                     val themeStyles = listOf(
                         "wild" to stringResource(R.string.theme_style_wild),
                         "md3" to stringResource(R.string.theme_style_md3),
                         "miui_x" to stringResource(R.string.theme_style_miui_x)
                     )
                     val currentThemeStyle = prefs.getString("theme_style", "wild") ?: "wild"
-                    val currentThemeDisplay = themeStyles.firstOrNull { it.first == currentThemeStyle }?.second
-                        ?: themeStyles[0].second
+                    val currentThemeDisplay = themeStyles.firstOrNull { it.first == currentThemeStyle }?.second ?: themeStyles[0].second
 
-                    val themeStyleDialog = rememberCustomDialog { dismiss ->
+                    val themeDialog = rememberCustomDialog { dismiss ->
                         val options = themeStyles.map { (_, displayName) ->
                             ListOption(titleText = displayName, selected = currentThemeStyle == themeStyles.first { it.second == displayName }.first)
                         }
                         var selectedIndex by remember { mutableIntStateOf(themeStyles.indexOfFirst { it.first == currentThemeStyle }.coerceAtLeast(0)) }
 
                         ListDialog(
-                            state = rememberUseCaseState(
-                                visible = true,
-                                onFinishedRequest = {
-                                    if (selectedIndex >= 0) {
-                                        prefs.edit { putString("theme_style", themeStyles[selectedIndex].first) }
-                                        refreshActivity(context)
-                                    }
-                                    dismiss()
-                                },
-                                onCloseRequest = { dismiss() }
-                            ),
-                            header = Header.Default(title = stringResource(R.string.theme_style_title)),
-                            selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ ->
-                                selectedIndex = index
-                            }
+                            state = rememberUseCaseState(visible = true, onFinishedRequest = {
+                                if (selectedIndex >= 0) {
+                                    prefs.edit { putString("theme_style", themeStyles[selectedIndex].first) }
+                                    refreshActivity(context)
+                                }
+                                dismiss()
+                            }, onCloseRequest = { dismiss() }),
+                            header = Header.Default(title = themeStyleTitleText),
+                            selection = ListSelection.Single(showRadioButtons = true, options = options) { index, _ -> selectedIndex = index }
                         )
                     }
 
                     ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { themeStyleDialog.show() },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { themeDialog.show() },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         leadingContent = { Icon(Icons.Filled.Palette, null) },
-                        headlineContent = {
-                            Text(text = stringResource(R.string.theme_style_title), fontWeight = FontWeight.SemiBold)
-                        },
+                        headlineContent = { Text(themeStyleTitleText, fontWeight = FontWeight.SemiBold) },
                         supportingContent = { Text(currentThemeDisplay) }
                     )
 
+                    // Banner switch
                     var useBanner by rememberSaveable { mutableStateOf(prefs.getBoolean("use_banner", true)) }
                     if (ksuVersion != null) {
                         SwitchItem(
                             icon = Icons.Filled.ViewCarousel,
-                            title = stringResource(R.string.settings_banner),
-                            summary = stringResource(R.string.settings_banner_summary),
+                            title = bannerText,
+                            summary = bannerSummaryText,
                             checked = useBanner,
                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -546,13 +421,14 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                         }
                     }
 
+                    // AMOLED mode
                     var enableAmoled by rememberSaveable { mutableStateOf(prefs.getBoolean("enable_amoled", false)) }
                     if (isSystemInDarkTheme()) {
-                        val activity = LocalContext.current as? MainActivity
+                        val activity = context as? MainActivity
                         SwitchItem(
                             icon = Icons.Filled.Contrast,
-                            title = stringResource(R.string.settings_amoled_mode),
-                            summary = stringResource(R.string.settings_amoled_mode_summary),
+                            title = amoledModeText,
+                            summary = amoledModeSummaryText,
                             checked = enableAmoled,
                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -565,28 +441,9 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                 }
             }
 
-            Spacer(Modifier.height(80.dp)) // Bottom padding for nav bar
+            Spacer(Modifier.height(80.dp))
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TopBar(
-    onBack: () -> Unit = {},
-    scrollBehavior: TopAppBarScrollBehavior? = null
-) {
-    TopAppBar(
-        title = { Text(
-                text = stringResource(R.string.customization),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Black,
-            ) }, navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
-        },
-        windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
-        scrollBehavior = scrollBehavior
-    )
 }
 
 @Preview

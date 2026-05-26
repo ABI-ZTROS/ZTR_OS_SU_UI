@@ -433,7 +433,7 @@ class MainActivity : ComponentActivity() {
     }
     
     // ZTR_OS SU: Clear wallpaper
-    fun clearWallpaper() {
+    fun clearCustomWallpaper() {
         wallpaperUriState.value = null
     }
 
