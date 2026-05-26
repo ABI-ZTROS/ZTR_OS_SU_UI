@@ -28,6 +28,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.lifecycle.compose.dropUnlessResumed
@@ -150,6 +151,8 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
     val clearTitle = stringResource(R.string.clear_wallpaper_title)
     val clearContent = stringResource(R.string.clear_wallpaper_content)
     val clearedMsg = stringResource(R.string.wallpaper_cleared)
+    val confirmText = stringResource(R.string.confirm)
+    val cancelText = stringResource(R.string.cancel)
 
     Scaffold(
         topBar = {
@@ -272,8 +275,8 @@ fun CustomizationScreen(navigator: DestinationsNavigator) {
                                         val result = clearDialog.awaitConfirm(
                                             title = clearTitle,
                                             content = clearContent,
-                                            confirm = stringResource(R.string.confirm),
-                                            dismiss = stringResource(R.string.cancel)
+                                            confirm = confirmText,
+                                            dismiss = cancelText
                                         )
                                         if (result == ConfirmResult.Confirmed) {
                                             prefs.edit { remove("wallpaper_uri") }
