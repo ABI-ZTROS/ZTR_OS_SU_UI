@@ -211,7 +211,10 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                 WarningCard(
                     stringResource(id = R.string.grant_root_failed),
                     onClick = {
-                        restartActivity(context)
+                        val activity = context.findActivity()
+                        if (activity != null) {
+                            restartActivity(activity)
+                        }
                     }
                 )
             }
@@ -585,7 +588,11 @@ fun RebootDropdownItem(@StringRes id: Int, reason: String = "") {
     DropdownMenuItem(text = {
         Text(stringResource(id))
     }, onClick = {
-        reboot(reason)
+        if (reason.isEmpty()) {
+            reboot("")
+        } else {
+            reboot(reason)
+        }
     })
 }
 
@@ -1477,7 +1484,7 @@ private fun QuickActionsCard() {
                                 confirm = confirmText
                             )
                             if (result == ConfirmResult.Confirmed) {
-                                reboot()
+                                reboot("")
                             }
                         }
                     },

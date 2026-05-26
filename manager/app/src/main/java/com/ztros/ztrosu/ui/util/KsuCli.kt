@@ -612,3 +612,79 @@ suspend fun runModuleAction(
     onStdout("Action completed successfully")
     true
 }
+
+/**
+ * Flash AnyKernel zip - UI-Only mode (simulated)
+ * This is the synchronous version used by flashIt
+ */
+fun flashAnyKernelZip(
+    uri: Uri,
+    onStdout: (String) -> Unit,
+    onStderr: (String) -> Unit
+): FlashResult {
+    Log.i(TAG, "UI-Only: Simulating AnyKernel zip flash for $uri")
+    // Simulate some output
+    onStdout("Flashing AnyKernel zip...")
+    onStdout("AnyKernel flash completed successfully")
+    return FlashResult(0, "", true)
+}
+
+/**
+ * Get superuser count - UI-Only mode
+ */
+fun getSuperuserCount(): Int {
+    return getSuperuserList().count { it.allowed }
+}
+
+/**
+ * Check if su compat is disabled - UI-Only mode
+ */
+fun isSuCompatDisabled(): Boolean {
+    return false
+}
+
+/**
+ * Get current mount system - UI-Only mode
+ */
+fun currentMountSystem(): String {
+    return "OverlayFS"
+}
+
+/**
+ * Get SuSFS status - UI-Only mode
+ */
+fun getSuSFS(): String {
+    return "Unsupported"
+}
+
+/**
+ * Get SuSFS version - UI-Only mode
+ */
+fun getSuSFSVersion(): String {
+    return ""
+}
+
+/**
+ * Get SuSFS variant - UI-Only mode
+ */
+fun getSuSFSVariant(): String {
+    return ""
+}
+
+/**
+ * Get Zygisk implementation - UI-Only mode
+ */
+fun getZygiskImplementation(key: String): String {
+    return when (key) {
+        "name" -> "None"
+        "version" -> "0.0.0"
+        else -> ""
+    }
+}
+
+/**
+ * Get SELinux status - UI-Only mode
+ */
+fun getSELinuxStatus(): String {
+    return getSelinuxEnforce()?.let { if (it) "Enforcing" else "Permissive" } ?: "Unknown"
+}

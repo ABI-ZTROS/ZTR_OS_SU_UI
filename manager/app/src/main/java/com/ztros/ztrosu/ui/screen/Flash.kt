@@ -67,13 +67,21 @@ suspend fun flashModulesSequentially(
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit
 ): FlashResult {
+    var finalResult: FlashResult = FlashResult(0, "", true)
     for (uri in uris) {
-        val result = flashModule(uri, onStdout, onStderr)
-        if (result.code != 0) {
-            return FlashResult(result.code, result.err, result.showReboot)
+        var flashResult: FlashResult? = null
+        flashModule(uri) { result ->
+            flashResult = result
+        }
+        // Wait for the result to be set (flashModule is suspend, so it will complete before continuing)
+        flashResult?.let { result ->
+            if (result.code != 0) {
+                return FlashResult(result.code, result.err, result.showReboot)
+            }
+            finalResult = result
         }
     }
-    return FlashResult(0, "", true)
+    return finalResult
 }
 
 /**
