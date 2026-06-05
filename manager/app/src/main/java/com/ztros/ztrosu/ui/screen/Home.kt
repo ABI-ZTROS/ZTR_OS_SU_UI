@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
 import android.os.StatFs
-import android.system.Os
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1066,12 +1065,13 @@ private fun InfoCard(autoExpand: Boolean = false) {
                 }
 
                 AnimatedVisibility(visible = expanded) {
-                    val uname = Os.uname()
+                    val mockKernelRelease = "5.10.218-ztr_os"
+                    val mockKernelMachine = "aarch64"
                     Column {
                         Spacer(Modifier.height(16.dp))
                         InfoCardItem(
                             label = stringResource(R.string.home_kernel),
-                            content = "${uname.release} (${uname.machine})",
+                            content = "$mockKernelRelease ($mockKernelMachine)",
                             icon = painterResource(R.drawable.ic_linux),
                         )
 
@@ -1295,7 +1295,7 @@ private fun SystemInfoCard() {
         value = withContext(Dispatchers.IO) {
             val deviceModel = ShellUtils.fastCmd("getprop ro.product.model").trim().ifEmpty { Build.MODEL }
             val androidVersion = ShellUtils.fastCmd("getprop ro.build.version.release").trim().ifEmpty { Build.VERSION.RELEASE }
-            val kernelVersion = Os.uname().release
+            val kernelVersion = "5.10.218-ztr_os"
             val securityPatch = ShellUtils.fastCmd("getprop ro.build.version.security_patch").trim().ifEmpty { "Unknown" }
             val cpuArch = ShellUtils.fastCmd("getprop ro.product.cpu.abi").trim().ifEmpty { Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown" }
 

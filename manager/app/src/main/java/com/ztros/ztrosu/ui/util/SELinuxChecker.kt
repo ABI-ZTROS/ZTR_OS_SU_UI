@@ -3,10 +3,10 @@ package com.ztros.ztrosu.ui.util
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.ztros.ztrosu.R
-import java.io.File
+import com.topjohnwu.superuser.io.SuFile
 
 @Composable
-fun getSELinuxStatus() = File("/sys/fs/selinux/enforce").run {
+fun getSELinuxStatus() = SuFile("/sys/fs/selinux/enforce").run {
     when {
         !exists() -> stringResource(R.string.selinux_status_disabled)
         !isFile -> stringResource(R.string.selinux_status_unknown)

@@ -24,7 +24,6 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
-import com.ztros.ztrosu.Natives
 import com.ztros.ztrosu.R
 import com.ztros.ztrosu.ui.LocalScrollState
 import com.ztros.ztrosu.ui.component.rememberLoadingDialog

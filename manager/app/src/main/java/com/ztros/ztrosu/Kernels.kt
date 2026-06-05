@@ -1,10 +1,8 @@
 package com.ztros.ztrosu
 
-import android.system.Os
-
 /**
- * @author weishu
- * @date 2022/12/10.
+ * ZTR_OS SU UI-Only Mode - Kernel version utilities (Mocked)
+ * Returns a fake kernel version string for UI testing.
  */
 
 data class KernelVersion(val major: Int, val patchLevel: Int, val subLevel: Int) {
@@ -64,8 +62,9 @@ fun parseKernelVersion(version: String): KernelVersion {
     }
 }
 
+/**
+ * UI-Only Mode: Returns a fake kernel version instead of reading from the actual kernel.
+ */
 fun getKernelVersion(): KernelVersion {
-    Os.uname().release.let {
-        return parseKernelVersion(it)
-    }
+    return parseKernelVersion("5.10.218")
 }

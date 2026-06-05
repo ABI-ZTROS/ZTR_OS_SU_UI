@@ -124,6 +124,25 @@ fun DeveloperScreen(navigator: DestinationsNavigator) {
                     enableWebDebugging = it
                 }
             }
+
+            // --- VFS Debug Center ---
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "VFS 调试中心",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            SettingsItem(
+                icon = Icons.Filled.Terminal,
+                title = "VFS 控制中心",
+                summary = "文件系统 Hook、审计、防格机、身份伪装"
+            ) {
+                // 启动 VFS Debug Screen
+                val intent = Intent(context, VFSDebugActivity::class.java)
+                context.startActivity(intent)
+            }
         }
     }
 }
