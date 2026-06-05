@@ -209,6 +209,58 @@ object VFSPersistenceManager {
         true
     }
 
+    // ==================== Policy Settings ====================
+
+    suspend fun savePolicySettings(settings: VFSPolicySettings): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = settings.toJSON()
+            memoryConfig = JSONObject().apply {
+                put("version", CONFIG_VERSION)
+                put("enabled", json.optBoolean("enabled", false))
+                put("logLevel", json.optInt("logLevel", 2))
+                put("defaultAction", json.optString("defaultAction", "allow"))
+                put("activeTemplateId", "")
+                put("lastModified", System.currentTimeMillis())
+            }.toString()
+            lastSaveTime = System.currentTimeMillis()
+            Log.i(TAG, "[UI-Only] Saved policy settings to memory")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "[UI-Only] Failed to save policy settings", e)
+            false
+        }
+    }
+
+    // ==================== Active Template ID ====================
+
+    suspend fun saveActiveTemplateId(templateId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val configJson = memoryConfig ?: createDefaultConfig()
+            val config = JSONObject(configJson)
+            config.put("activeTemplateId", templateId)
+            config.put("lastModified", System.currentTimeMillis())
+            memoryConfig = config.toString()
+            lastSaveTime = System.currentTimeMillis()
+            Log.i(TAG, "[UI-Only] Saved active template ID: $templateId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "[UI-Only] Failed to save active template ID", e)
+            false
+        }
+    }
+
+    suspend fun loadActiveTemplateId(): String? = withContext(Dispatchers.IO) {
+        try {
+            val configJson = memoryConfig ?: return@withContext null
+            val config = JSONObject(configJson)
+            val id = config.optString("activeTemplateId", "")
+            if (id.isBlank()) null else id
+        } catch (e: Exception) {
+            Log.e(TAG, "[UI-Only] Failed to load active template ID", e)
+            null
+        }
+    }
+
     // ==================== Stats History ====================
 
     suspend fun loadStatsHistory(): JSONArray = withContext(Dispatchers.IO) {

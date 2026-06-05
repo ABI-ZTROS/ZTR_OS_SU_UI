@@ -69,17 +69,11 @@ suspend fun flashModulesSequentially(
 ): FlashResult {
     var finalResult: FlashResult = FlashResult(0, "", true)
     for (uri in uris) {
-        var flashResult: FlashResult? = null
-        flashModule(uri) { result ->
-            flashResult = result
+        val result = flashModule(uri, onStdout, onStderr)
+        if (result.code != 0) {
+            return FlashResult(result.code, result.err, result.showReboot)
         }
-        // Wait for the result to be set (flashModule is suspend, so it will complete before continuing)
-        flashResult?.let { result ->
-            if (result.code != 0) {
-                return FlashResult(result.code, result.err, result.showReboot)
-            }
-            finalResult = result
-        }
+        finalResult = result
     }
     return finalResult
 }
@@ -333,7 +327,7 @@ sealed class FlashIt : Parcelable {
     data class FlashAnyKernel(val uri: Uri) : FlashIt()
 }
 
-fun flashIt(
+suspend fun flashIt(
     flashIt: FlashIt,
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit

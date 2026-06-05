@@ -46,7 +46,7 @@ class WebViewInterface(
 
     @JavascriptInterface
     fun exec(cmd: String): String {
-        return withNewRootShell(true) { ShellUtils.fastCmd(this, cmd) }
+        return withNewRootShell(true) { ShellUtils.fastCmd(cmd) }
     }
 
     @JavascriptInterface
@@ -375,7 +375,7 @@ class WebViewInterface(
     fun readFile(path: String): String {
         return try {
             val cmd = "cat '${path.replace("'", "'\\''")}'"
-            withNewRootShell(true) { ShellUtils.fastCmd(this, cmd) }
+            withNewRootShell(true) { ShellUtils.fastCmd(cmd) }
         } catch (e: Exception) {
             ""
         }
@@ -389,7 +389,7 @@ class WebViewInterface(
             val cmd = "cat '${tmpFile.absolutePath.replace("'", "'\\''")}' > '${path.replace("'", "'\\''")}'"
             var result = ""
             withNewRootShell(true) {
-                result = ShellUtils.fastCmd(this, cmd)
+                result = ShellUtils.fastCmd(cmd)
                 this.close()
             }
             tmpFile.delete()
@@ -405,7 +405,7 @@ class WebViewInterface(
             val cmd = "rm -rf '${path.replace("'", "'\\''")}'"
             var result = ""
             withNewRootShell(true) {
-                result = ShellUtils.fastCmd(this, cmd)
+                result = ShellUtils.fastCmd(cmd)
                 this.close()
             }
             result.isNotEmpty()
@@ -420,7 +420,7 @@ class WebViewInterface(
             val cmd = "mv '${src.replace("'", "'\\''")}' '${dest.replace("'", "'\\''")}'"
             var result = ""
             withNewRootShell(true) {
-                result = ShellUtils.fastCmd(this, cmd)
+                result = ShellUtils.fastCmd(cmd)
                 this.close()
             }
             result.isNotEmpty()
@@ -435,7 +435,7 @@ class WebViewInterface(
             val cmd = "cp -a '${src.replace("'", "'\\''")}' '${dest.replace("'", "'\\''")}'"
             var result = ""
             withNewRootShell(true) {
-                result = ShellUtils.fastCmd(this, cmd)
+                result = ShellUtils.fastCmd(cmd)
                 this.close()
             }
             result.isNotEmpty()

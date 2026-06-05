@@ -204,6 +204,20 @@ object VFSRuleEngine {
         VFSPersistenceManager.saveRules(rules)
     }
 
+    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "[UI-Only] VFSRuleEngine initialized")
+        true
+    }
+
+    fun validateRule(rule: VFSRule): Pair<Boolean, String> {
+        if (rule.pathPattern.isBlank()) return Pair(false, "Path pattern cannot be blank")
+        if (rule.pathPattern.startsWith("/") && rule.pathPattern.length < 2) return Pair(false, "Path pattern too short")
+        return Pair(true, "Valid")
+    }
+
+    // Alias for compatibility with VFSDebugScreen
+    suspend fun deleteRule(ruleId: String): Boolean = removeRule(ruleId)
+
     fun getDebugInfo(): String {
         return buildString {
             appendLine("VFSRuleEngine (UI-Only Mode):")

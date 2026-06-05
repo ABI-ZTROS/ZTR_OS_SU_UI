@@ -1975,8 +1975,8 @@ private fun PolicyTranslatorSection() {
     // Auto-translate on state change
     LaunchedEffect(enabled, logLevel, defaultAction) {
         val binary = VFSProtocolTranslator.policyToBinary(enabled, logLevel, defaultAction)
-        hexDump = VFSProtocolTranslator.hexDump(binary)
-        val map = VFSProtocolTranslator.policyToMap(binary)
+        hexDump = binary?.let { VFSProtocolTranslator.hexDump(it) } ?: "<null>"
+        val map = binary?.let { VFSProtocolTranslator.policyToMap(it) } ?: emptyMap()
         fieldBreakdown = map.entries.joinToString("\n") { "  ${it.key} = ${it.value}" }
     }
 

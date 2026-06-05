@@ -74,7 +74,7 @@ fun TemplateConfig(
                             text = { Text(tid) },
                             onClick = {
                                 template = tid
-                                if (com.ztros.ztrosu.ui.util.setSepolicy(templateInfo.rules.joinToString("\n"))) {
+                                if (com.ztros.ztrosu.ui.util.setSepolicy(tid, templateInfo.rules.joinToString("\n"))) {
                                     onProfileChange(
                                         profile.copy(
                                             rootTemplate = tid,

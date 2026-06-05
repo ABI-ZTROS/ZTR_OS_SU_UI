@@ -143,7 +143,7 @@ fun AppProfileScreen(
                             snackBarHost.showSnackbar(suNotAllowed)
                             return@launch
                         }
-                        if (!it.rootUseDefault && it.rules.isNotEmpty() && !com.ztros.ztrosu.ui.util.setSepolicy(it.rules)) {
+                        if (!it.rootUseDefault && it.rules.isNotEmpty() && !com.ztros.ztrosu.ui.util.setSepolicy(packageName, it.rules)) {
                             snackBarHost.showSnackbar(failToUpdateSepolicy)
                             return@launch
                         }

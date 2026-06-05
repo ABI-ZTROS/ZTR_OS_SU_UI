@@ -7,9 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.ramcosta.composedestinations.EmptyDestinationsNavigator
-import com.ztros.ztrosu.ui.theme.ZtrosuTheme
+import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator
+import com.ztros.ztrosu.ui.theme.KernelSUTheme
 
 /**
  * VFS Debug 独立 Activity（UI-Only Mode）
@@ -22,7 +24,7 @@ class VFSDebugActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            ZtrosuTheme {
+            KernelSUTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

@@ -154,7 +154,6 @@ class WebUIActivity : ComponentActivity() {
                 SuFilePathHandler(
                     this,
                     webRoot,
-                    rootShell,
                     { insets },
                     { enable -> enableInsets(enable) }
                 )

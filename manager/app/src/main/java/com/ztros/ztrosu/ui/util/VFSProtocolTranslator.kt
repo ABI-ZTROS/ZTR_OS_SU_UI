@@ -342,11 +342,21 @@ object VFSProtocolTranslator {
                 sb.append(if (b in 32..126) b.toChar() else '.')
             }
             sb.append('|')
-            sb.append('\\n')
+            sb.append('\n')
             offset = rowEnd
         }
-        if (data.size > maxBytes) sb.append("... (${data.size - maxBytes} more bytes)\\n")
-        return sb.toString().trimEnd('\\n')
+        if (data.size > maxBytes) sb.append("... (${data.size - maxBytes} more bytes)\n")
+        return sb.toString().trimEnd('\n')
+    }
+
+    fun policyToMap(data: ByteArray): Map<String, Any> {
+        if (data.size < 4) return emptyMap()
+        return mapOf(
+            "enabled" to (data[0] != 0.toByte()),
+            "logLevel" to (data[1].toInt() and 0xFF),
+            "defaultAction" to if (data[2] == 0x00.toByte()) "allow" else "deny",
+            "reserved" to (data[3].toInt() and 0xFF)
+        )
     }
 
     fun validateRuleString(rule: String): ValidationResult {

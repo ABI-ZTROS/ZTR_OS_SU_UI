@@ -133,4 +133,26 @@ object VFSNetlinkListener {
             appendLine("  Total Events: ${totalEventsReceived.get()}")
         }
     }
+
+    // Buffered events for UI-Only mode
+    private val bufferedEvents = mutableListOf<VFSEvent>()
+
+    fun getBufferedEvents(): List<VFSEvent> = synchronized(bufferedEvents) {
+        bufferedEvents.toList()
+    }
+
+    fun clearBuffer() {
+        synchronized(bufferedEvents) {
+            bufferedEvents.clear()
+        }
+    }
+
+    fun addBufferedEvent(event: VFSEvent) {
+        synchronized(bufferedEvents) {
+            bufferedEvents.add(event)
+            if (bufferedEvents.size > 500) {
+                bufferedEvents.removeAt(0)
+            }
+        }
+    }
 }

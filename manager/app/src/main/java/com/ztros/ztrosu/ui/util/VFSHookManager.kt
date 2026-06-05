@@ -148,6 +148,13 @@ object VFSHookManager {
         } catch (e: Exception) { false }
     }
 
+    // Alias for compatibility with VFSDebugScreen
+    suspend fun getHookTargets(): List<VFSHookTarget> = getTargets()
+
+    suspend fun toggleHook(id: String, enabled: Boolean): Boolean = setTargetEnabled(id, enabled)
+
+    suspend fun clearAll(): Boolean = clearAllTargets()
+
     fun getDebugInfo(): String = buildString {
         appendLine("VFSHookManager (UI-Only Mode):")
         appendLine("  Total Targets: ${targets.size}")

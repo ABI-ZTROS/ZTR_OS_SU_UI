@@ -1,12 +1,15 @@
 package com.ztros.ztrosu.ui.screen
 
 import android.content.Context
+import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeveloperMode
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -134,15 +137,25 @@ fun DeveloperScreen(navigator: DestinationsNavigator) {
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(Modifier.height(8.dp))
-            SettingsItem(
-                icon = Icons.Filled.Terminal,
-                title = "VFS 控制中心",
-                summary = "文件系统 Hook、审计、防格机、身份伪装"
-            ) {
-                // 启动 VFS Debug Screen
-                val intent = Intent(context, VFSDebugActivity::class.java)
-                context.startActivity(intent)
-            }
+            ListItem(
+                modifier = Modifier.clickable {
+                    val intent = Intent(context, VFSDebugActivity::class.java)
+                    context.startActivity(intent)
+                },
+                headlineContent = {
+                    Text(
+                        text = "VFS 控制中心",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                supportingContent = {
+                    Text("文件系统 Hook、审计、防格机、身份伪装")
+                },
+                leadingContent = {
+                    Icon(Icons.Filled.Terminal, contentDescription = null)
+                }
+            )
         }
     }
 }
